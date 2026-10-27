@@ -4,6 +4,11 @@ import HomePage from '../views/HomePage.vue'
 import AuthPage from '../views/AuthPage.vue'
 import BrowsePage from '../views/BrowsePage.vue'
 import ListingsPage from '../views/ListingsPage.vue'
+import CheckoutPage from '../views/CheckoutPage.vue'
+import HostDashboardPage from '../views/HostDashboardPage.vue'
+import HostSpacesPage from '../views/HostSpacesPage.vue'
+import HostRequestsPage from '../views/HostRequestsPage.vue'
+import AddSpacePage from '../views/AddSpacePage.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -34,6 +39,31 @@ const routes: Array<RouteRecordRaw> = [
     path: '/listings',
     name: 'Listings',
     component: ListingsPage
+  },
+  {
+    path: '/checkout',
+    name: 'Checkout',
+    component: CheckoutPage
+  },
+  {
+    path: '/host',
+    name: 'HostDashboard',
+    component: HostDashboardPage
+  },
+  {
+    path: '/host/spaces',
+    name: 'HostSpaces',
+    component: HostSpacesPage
+  },
+  {
+    path: '/host/requests',
+    name: 'HostRequests',
+    component: HostRequestsPage
+  },
+  {
+    path: '/host/spaces/new',
+    name: 'AddSpace',
+    component: AddSpacePage
   }
 ]
 
