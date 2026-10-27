@@ -9,14 +9,14 @@
           </a>
 
           <div class="nav-links">
-            <a href="#explore">Explore stays</a>
+            <a href="/browse">Explore stays</a>
             <a href="#how-it-works">How it works</a>
-            <a href="#become-host">Become a host</a>
+            <a href="/signup?role=landlord">Become a host</a>
           </div>
 
           <div class="nav-actions">
-            <button class="login-button" type="button">Log in</button>
-            <button class="signup-button" type="button">Sign up</button>
+            <a class="login-button" href="/login?role=tenant">Log in</a>
+            <a class="signup-button" href="/signup?role=tenant">Sign up</a>
             <button class="menu-button" type="button" aria-label="Open menu">
               <ion-icon :icon="menuOutline" />
             </button>
@@ -31,7 +31,7 @@
               Discover thoughtfully chosen bedspaces and boarding houses made for the way you live.
             </p>
 
-            <form class="search-card" @submit.prevent>
+            <form class="search-card" action="/browse">
               <label class="search-field">
                 <ion-icon :icon="locationOutline" />
                 <span>
@@ -90,7 +90,7 @@
               <div class="eyebrow"><span class="eyebrow-line" /> HANDPICKED FOR YOU</div>
               <h2 id="discover-title">Spaces worth<br /><em>coming home to.</em></h2>
             </div>
-            <a class="view-all" href="#all-stays">View all stays <ion-icon :icon="arrowForwardOutline" /></a>
+            <a class="view-all" href="/browse">View all stays <ion-icon :icon="arrowForwardOutline" /></a>
           </div>
 
           <div class="stay-grid">
@@ -208,7 +208,7 @@ h1 em, h2 em { color: #e2743e; font-weight: 600; }
 .search-field ion-icon { color: #e2743e; font-size: 19px; }
 .search-field span { display: flex; flex-direction: column; min-width: 0; }
 .search-field small { color: #174b35; font-size: 10px; font-weight: 700; margin-bottom: 3px; }
-.search-field input { border: 0; color: #718078; font: inherit; font-size: 11px; outline: 0; padding: 0; width: 100px; }
+.search-field input { appearance: none; background: #fff; border: 0; color: #718078; color-scheme: light; font: inherit; font-size: 11px; outline: 0; padding: 0; width: 100px; }
 .search-field input::placeholder { color: #a8b0aa; }
 .search-button { align-items: center; background: #e2743e; border-radius: 10px; color: white; display: flex; font-size: 12px; font-weight: 700; gap: 7px; margin-left: 7px; padding: 15px 18px; transition: background .25s, transform .25s; }
 .search-button:hover { background: #c95f2d; transform: scale(1.03); }
