@@ -1,5 +1,3 @@
-import type { BookingSpace } from '../components/BookingPanel.vue';
-
 export type Listing = {
   id: number;
   name: string;
@@ -13,7 +11,35 @@ export type Listing = {
   image: string;
 };
 
+export type BookingBed = {
+  id: string;
+  name: string;
+  status: 'available' | 'occupied';
+  row: number;
+  column: number;
+  image?: string;
+  price?: number;
+};
+
+export type BookingRoom = {
+  id: string;
+  name: string;
+  image?: string;
+  beds: BookingBed[];
+  grid: { rows: number; columns: number };
+};
+
+export type BookingFloor = {
+  id: string;
+  name: string;
+  image?: string;
+  rooms: BookingRoom[];
+};
+
 export const defaultListingImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
+export const defaultFloorImage = 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85';
+export const defaultRoomImage = 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=85';
+export const defaultBedImage = 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=85';
 
 export const listings: Listing[] = [
   { id: 1, name: 'The Greenhouse', location: 'Katipunan, Quezon City', price: 8500, rating: '4.9', type: 'Private room', amenities: 8, badge: 'Casa favorite', description: 'A sun-filled room near campus with a warm, creative community.', image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=85' },
@@ -24,12 +50,28 @@ export const listings: Listing[] = [
   { id: 6, name: 'The Nook', location: 'Taft, Manila', price: 5800, rating: '4.6', type: 'Bedspace', amenities: 5, badge: 'Budget pick', description: 'Simple, bright, and close to everything you need.', image: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=900&q=85' },
 ];
 
-export function getBookingSpaces(listing: Listing): BookingSpace[] {
-  return listing.type === 'Private room'
-    ? [{ name: 'Private bed', status: 'available', image: listing.image }]
-    : [
-        { name: 'Bed 01', status: 'available' },
-        { name: 'Bed 02', status: 'occupied' },
-        { name: 'Bed 03', status: 'available' },
-      ];
+export function getBookingFloors(listing: Listing): BookingFloor[] {
+  const floorCount = listing.type === 'Private room' ? 1 : 2;
+  return Array.from({ length: floorCount }, (_, floorIndex): BookingFloor => {
+    const roomCount = listing.type === 'Private room' ? 1 : 2;
+    const rooms = Array.from({ length: roomCount }, (_, roomIndex): BookingRoom => ({
+      id: `${listing.id}-floor-${floorIndex + 1}-room-${roomIndex + 1}`,
+      name: listing.type === 'Private room' ? 'Private room' : `Room ${floorIndex + 1}${roomIndex + 1}`,
+      image: floorIndex === 0 && roomIndex === 0 ? listing.image : undefined,
+      grid: { rows: 2, columns: 3 },
+      beds: listing.type === 'Private room'
+        ? [{ id: `${listing.id}-bed-1`, name: 'Private bed', status: 'available', row: 1, column: 2, image: listing.image }]
+        : [
+            { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-1`, name: `Bed ${floorIndex + 1}${roomIndex + 1}01`, status: 'available', row: 1, column: 1 },
+            { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-2`, name: `Bed ${floorIndex + 1}${roomIndex + 1}02`, status: 'occupied', row: 1, column: 3 },
+            { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-3`, name: `Bed ${floorIndex + 1}${roomIndex + 1}03`, status: 'available', row: 2, column: 2 },
+          ],
+    }));
+    return {
+      id: `${listing.id}-floor-${floorIndex + 1}`,
+      name: floorIndex === 0 ? 'Ground floor' : `Floor ${floorIndex + 1}`,
+      image: floorIndex === 0 ? listing.image || defaultFloorImage : undefined,
+      rooms,
+    };
+  });
 }

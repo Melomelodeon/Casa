@@ -126,7 +126,7 @@
               <span class="selected-rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span>
             </div>
             <p class="selected-description">{{ selectedListing.description }}</p>
-            <BookingPanel :listing="selectedListing" :spaces="selectedSpaces" @book="startBooking" />
+            <BookingPanel :listing="selectedListing" :floors="selectedFloors" @book="startBooking" />
             <div class="selected-listing-footer">
               <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
               <a href="/listings">View space details <ion-icon :icon="arrowForwardOutline" /></a>
@@ -142,8 +142,8 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
-import BookingPanel, { type BookingSpace } from '../components/BookingPanel.vue';
-import { getBookingSpaces, listings, type Listing } from '../data/listings';
+import BookingPanel from '../components/BookingPanel.vue';
+import { getBookingFloors, listings, type BookingBed, type Listing } from '../data/listings';
 import {
   arrowForwardOutline,
   calendarOutline,
@@ -187,8 +187,8 @@ const favorites = ref(new Set<number>());
 const showFilters = ref(false);
 const showMapNotice = ref(false);
 const router = useRouter();
-const selectedSpaces = computed<BookingSpace[]>(() => selectedListing.value ? getBookingSpaces(selectedListing.value) : []);
-function startBooking(space: BookingSpace) {
+const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
+function startBooking(space: BookingBed) {
   if (!selectedListing.value) return;
   void router.push({
     name: 'Checkout',

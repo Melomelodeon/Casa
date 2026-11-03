@@ -75,7 +75,7 @@
               <span class="selected-rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span>
             </div>
             <p class="selected-description">{{ selectedListing.description }}</p>
-            <BookingPanel :listing="selectedListing" :spaces="selectedSpaces" @book="startBooking" />
+            <BookingPanel :listing="selectedListing" :floors="selectedFloors" @book="startBooking" />
             <div class="selected-listing-footer">
               <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
               <a href="/listings">View space details <ion-icon :icon="arrowForwardOutline" /></a>
@@ -91,11 +91,10 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
-import BookingPanel, { type BookingSpace } from '../components/BookingPanel.vue';
-import { defaultListingImage, getBookingSpaces, listings, type Listing } from '../data/listings';
+import BookingPanel from '../components/BookingPanel.vue';
+import { defaultListingImage, getBookingFloors, listings, type BookingBed, type Listing } from '../data/listings';
 import { arrowForwardOutline, heart, heartOutline, locationOutline, mapOutline, optionsOutline, personOutline, searchOutline, star } from 'ionicons/icons';
 
-type VisualSpace = BookingSpace;
 const searchTerm = ref('');
 const typeFilter = ref('all');
 const budgetFilter = ref('all');
@@ -121,7 +120,7 @@ function toggleFavorite(id: number) {
 function openListing(listing: Listing) {
   selectedListing.value = listing;
 }
-function startBooking(space: BookingSpace) {
+function startBooking(space: BookingBed) {
   if (!selectedListing.value) return;
   void router.push({
     name: 'Checkout',
@@ -135,7 +134,7 @@ function startBooking(space: BookingSpace) {
     },
   });
 }
-const selectedSpaces = computed<VisualSpace[]>(() => selectedListing.value ? getBookingSpaces(selectedListing.value) : []);
+const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
 function clearFilters() {
   searchTerm.value = '';
   typeFilter.value = 'all';
@@ -185,5 +184,5 @@ function clearFilters() {
 .selected-listing-footer a { align-items: center; color: #e2743e; display: flex; font-size: 10px; font-weight: 700; gap: 5px; text-decoration: none; }
 .selected-listing-footer a ion-icon { font-size: 13px; }
 @media (max-width: 580px) { .listing-backdrop { align-items: end; padding: 0; }.selected-listing { border-radius: 14px 14px 0 0; max-height: 92vh; }.selected-listing-image { height: 145px; }.selected-listing-body { padding: 15px; } }
-.listing-backdrop .booking-panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; display: block; margin: 0; padding: 0; }
+.listing-backdrop .booking-panel { align-items: initial; background: transparent; border: 0; border-radius: 0; box-shadow: none; display: block; gap: initial; margin: 0; padding: 0; }
 </style>
