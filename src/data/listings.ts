@@ -58,13 +58,21 @@ export function getBookingFloors(listing: Listing): BookingFloor[] {
       id: `${listing.id}-floor-${floorIndex + 1}-room-${roomIndex + 1}`,
       name: listing.type === 'Private room' ? 'Private room' : `Room ${floorIndex + 1}${roomIndex + 1}`,
       image: floorIndex === 0 && roomIndex === 0 ? listing.image : undefined,
-      grid: { rows: 2, columns: 3 },
+      grid: [
+        { rows: 2, columns: 3 },
+        { rows: 3, columns: 4 },
+        { rows: 4, columns: 4 },
+        { rows: 4, columns: 5 },
+      ][(floorIndex * roomCount + roomIndex) % 4],
       beds: listing.type === 'Private room'
         ? [{ id: `${listing.id}-bed-1`, name: 'Private bed', status: 'available', row: 1, column: 2, image: listing.image }]
         : [
             { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-1`, name: `Bed ${floorIndex + 1}${roomIndex + 1}01`, status: 'available', row: 1, column: 1 },
-            { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-2`, name: `Bed ${floorIndex + 1}${roomIndex + 1}02`, status: 'occupied', row: 1, column: 3 },
+            { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-2`, name: `Bed ${floorIndex + 1}${roomIndex + 1}02`, status: 'occupied', row: 1, column: Math.min(3, [3, 4, 4, 5][(floorIndex * roomCount + roomIndex) % 4]) },
             { id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-3`, name: `Bed ${floorIndex + 1}${roomIndex + 1}03`, status: 'available', row: 2, column: 2 },
+            ...((floorIndex * roomCount + roomIndex) % 4 > 0 ? [{ id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-4`, name: `Bed ${floorIndex + 1}${roomIndex + 1}04`, status: 'available' as const, row: 2, column: 4 }] : []),
+            ...((floorIndex * roomCount + roomIndex) % 4 > 1 ? [{ id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-5`, name: `Bed ${floorIndex + 1}${roomIndex + 1}05`, status: 'occupied' as const, row: 3, column: 1 }] : []),
+            ...((floorIndex * roomCount + roomIndex) % 4 > 2 ? [{ id: `${listing.id}-bed-${floorIndex + 1}-${roomIndex + 1}-6`, name: `Bed ${floorIndex + 1}${roomIndex + 1}06`, status: 'available' as const, row: 4, column: 5 }] : []),
           ],
     }));
     return {

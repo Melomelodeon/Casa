@@ -111,8 +111,11 @@
         </aside>
       </main>
       <div v-if="selectedListing" class="listing-backdrop" @click.self="selectedListing = null">
-        <section class="selected-listing" role="dialog" aria-modal="true" aria-labelledby="selected-listing-title">
+        <section ref="selectedListingElement" class="selected-listing" role="dialog" aria-modal="true" aria-labelledby="selected-listing-title" @scroll="dismissScrollIndicator">
           <button class="selected-close" type="button" aria-label="Close listing details" @click="selectedListing = null">×</button>
+          <div v-if="hasScrollableContent" class="scroll-indicator" :class="{ 'is-hidden': scrollIndicatorDismissed }" aria-hidden="true">
+            <span class="scroll-chevron" />
+          </div>
           <div class="selected-listing-image" :style="{ backgroundImage: `url(${selectedListing.image})` }">
             <span class="selected-label">SELECTED SPACE</span>
           </div>
@@ -139,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import BookingPanel from '../components/BookingPanel.vue';
@@ -183,11 +186,39 @@ const searchTerm = ref('');
 const activeFilter = ref('all');
 const sortBy = ref('recommended');
 const selectedListing = ref<Listing | null>(null);
+const selectedListingElement = ref<HTMLElement | null>(null);
+const hasScrollableContent = ref(false);
+const scrollIndicatorDismissed = ref(false);
+let selectedListingResizeObserver: ResizeObserver | null = null;
 const favorites = ref(new Set<number>());
 const showFilters = ref(false);
 const showMapNotice = ref(false);
 const router = useRouter();
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
+function updateScrollIndicator() {
+  const element = selectedListingElement.value;
+  hasScrollableContent.value = Boolean(element && element.scrollHeight > element.clientHeight + 1);
+}
+function dismissScrollIndicator() {
+  if (selectedListingElement.value && selectedListingElement.value.scrollTop > 1) {
+    scrollIndicatorDismissed.value = true;
+  }
+}
+watch(selectedListing, (listing) => {
+  selectedListingResizeObserver?.disconnect();
+  selectedListingResizeObserver = null;
+  hasScrollableContent.value = false;
+  scrollIndicatorDismissed.value = false;
+  if (!listing) return;
+  void nextTick(() => {
+    updateScrollIndicator();
+    if (selectedListingElement.value) {
+      selectedListingResizeObserver = new ResizeObserver(updateScrollIndicator);
+      selectedListingResizeObserver.observe(selectedListingElement.value);
+    }
+  });
+});
+onBeforeUnmount(() => selectedListingResizeObserver?.disconnect());
 function startBooking(space: BookingBed) {
   if (!selectedListing.value) return;
   void router.push({
@@ -511,11 +542,52 @@ function clearFilters() {
   border: 1px solid #dce8dc;
   border-radius: 12px;
   box-shadow: 0 10px 24px rgba(23, 75, 53, .09);
-  max-height: 90vh;
-  max-width: 540px;
-  overflow: hidden;
+  max-height: calc(100vh - 40px);
+  max-width: 700px;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
+  scrollbar-width: none;
   width: 100%;
+}
+
+.selected-listing::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-indicator {
+  align-items: center;
+  animation: scroll-hint 1.4s ease-in-out infinite;
+  background: #fff;
+  border: 1px solid #dce8dc;
+  border-bottom: 0;
+  border-radius: 96px 96px 0 0;
+  bottom: 0;
+  display: flex;
+  height: 43px;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity .25s ease, transform .25s ease, visibility .25s ease;
+  transform: translateX(-50%);
+  width: 104px;
+  z-index: 2;
+}
+
+.scroll-indicator.is-hidden {
+  animation: none;
+  opacity: 0;
+  transform: translate(-50%, 100%);
+  visibility: hidden;
+}
+
+.scroll-chevron {
+  border-bottom: 4px solid #e2743e;
+  border-right: 4px solid #e2743e;
+  height: 15px;
+  position: relative;
+  transform: rotate(45deg) translate(-3px, -3px);
+  width: 15px;
 }
 
 .selected-close {
@@ -570,7 +642,7 @@ function clearFilters() {
 }
 
 .selected-listing-body {
-  padding: 17px;
+  padding: 17px 17px 38px;
 }
 
 .selected-listing-heading {
@@ -612,105 +684,6 @@ function clearFilters() {
 .selected-description {
   line-height: 1.5;
   margin-top: 13px;
-}
-
-.visual-heading {
-  align-items: center;
-  border-bottom: 1px solid #edf1ec;
-  display: flex;
-  justify-content: space-between;
-  margin-top: 17px;
-  padding-bottom: 9px;
-}
-
-.visual-heading strong {
-  color: #174b35;
-  font-family: 'Playfair Display', serif;
-  font-size: 15px;
-}
-
-.visual-heading span {
-  color: #89968d;
-  font-size: 9px;
-}
-
-.room-preview {
-  background: #f3f6f1;
-  border: 1px solid #dce7da;
-  border-radius: 8px;
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  overflow: hidden;
-  padding: 10px;
-}
-
-.visual-space {
-  background: #fff;
-  border: 2px solid #76ae80;
-  border-radius: 7px;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  padding: 5px;
-}
-
-.visual-space.occupied {
-  border-color: #b7c1b8;
-}
-
-.visual-space img {
-  border-radius: 4px;
-  height: 58px;
-  object-fit: cover;
-  width: 100%;
-}
-
-.visual-space strong {
-  color: #174b35;
-  font-size: 8px;
-  margin-top: 5px;
-}
-
-.visual-space small {
-  color: #4b9b61;
-  font-size: 8px;
-  margin-top: 2px;
-}
-
-.visual-space.occupied small {
-  color: #89968d;
-}
-
-.availability-legend {
-  display: flex;
-  gap: 13px;
-  margin-top: 9px;
-}
-
-.availability-legend span {
-  align-items: center;
-  color: #89968d;
-  display: flex;
-  font-size: 8px;
-  gap: 4px;
-}
-
-.availability-legend i {
-  border-radius: 50%;
-  display: inline-block;
-  height: 7px;
-  width: 7px;
-}
-
-.available-dot {
-  background: #4b9b61;
-}
-
-.occupied-dot {
-  background: #b7c1b8;
 }
 
 .selected-listing-footer {
@@ -1203,7 +1176,7 @@ function clearFilters() {
 
   .selected-listing {
     border-radius: 14px 14px 0 0;
-    max-height: 88vh;
+    max-height: 92vh;
   }
 
   .results-top {
@@ -1222,16 +1195,6 @@ function clearFilters() {
 
   .listing-image {
     min-height: 170px;
-  }
-
-  .selected-listing-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .selected-listing-footer a {
-    width: 100%;
   }
 
   .listing-meta span:nth-child(2),
@@ -1267,6 +1230,17 @@ function clearFilters() {
 
   .listing-meta strong {
     font-size: 13px;
+  }
+}
+
+@keyframes scroll-hint {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, 5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-indicator {
+    animation: none;
   }
 }
 </style>
