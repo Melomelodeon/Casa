@@ -39,20 +39,26 @@
 
       <div v-else key="beds" class="visual-stage beds-stage">
         <div class="bed-grid" :style="{ '--bed-rows': selectedRoom?.grid.rows, '--bed-columns': selectedRoom?.grid.columns }">
-          <span v-for="cell in gridCells" :key="cell" class="grid-cell" />
-          <button
-            v-for="bed in selectedRoom?.beds"
-            :key="bed.id"
-            class="bed-marker"
-            :class="{ occupied: bed.status === 'occupied' }"
-            :style="{ gridRow: bed.row, gridColumn: bed.column }"
-            type="button"
-            :aria-label="`${bed.name}, ${bed.status}`"
-            @click="selectBed(bed)"
-          >
-            <ion-icon class="bed-icon" :icon="bedOutline" />
-            <small>{{ bed.name }}</small>
-          </button>
+          <div v-for="cell in gridCells" :key="cell.id" class="grid-cell" :style="{ gridRow: cell.row, gridColumn: cell.column }">
+            <div v-if="selectedRoom?.grid.door?.row === cell.row && selectedRoom.grid.door.column === cell.column" class="door-marker" aria-label="Room entrance">
+              <ion-icon :icon="enterOutline" />
+              <small>Door</small>
+            </div>
+            <div class="bed-stack">
+              <button
+                v-for="bed in cell.beds"
+                :key="bed.id"
+                class="bed-marker"
+                :class="{ occupied: bed.status === 'occupied' }"
+                type="button"
+                :aria-label="`${bed.name}, ${bed.status}`"
+                @click="selectBed(bed)"
+              >
+                <ion-icon class="bed-icon" :icon="bedOutline" />
+                <small>{{ bed.name }}</small>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="availability-legend"><span><i class="available-dot" /> Available</span><span><i class="occupied-dot" /> Occupied</span><span><ion-icon :icon="gridOutline" /> Host layout</span></div>
       </div>
@@ -61,6 +67,12 @@
     <div v-if="selectedBed" class="selected-booking">
       <img :src="selectedBed.image || selectedRoom?.image || defaultRoomImage" :alt="selectedBed.name" @error="useFallback($event, defaultRoomImage)" />
       <div><span class="ready-label"><ion-icon :icon="selectedBed.status === 'available' ? checkmarkCircleOutline : lockClosedOutline" /> {{ selectedBed.status === 'available' ? 'READY TO BOOK' : 'OCCUPIED' }}</span><strong>{{ selectedBed.name }}</strong><small><ion-icon :icon="homeOutline" /> {{ selectedRoom?.name }} · ₱{{ listing.price.toLocaleString() }} / month</small></div>
+      <div v-if="selectedBed.maintenance?.length" class="selected-booking-history">
+        <strong>Maintenance history</strong>
+        <ul>
+          <li v-for="entry in selectedBed.maintenance" :key="entry">{{ entry }}</li>
+        </ul>
+      </div>
       <button v-if="selectedBed.status === 'available'" type="button" @click="emit('book', selectedBed)">Continue booking <ion-icon :icon="arrowForwardOutline" /></button>
     </div>
   </section>
@@ -69,7 +81,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { IonIcon } from '@ionic/vue';
-import { addOutline, arrowBackOutline, arrowForwardOutline, bedOutline, businessOutline, checkmarkCircleOutline, gridOutline, homeOutline, lockClosedOutline } from 'ionicons/icons';
+import { addOutline, arrowBackOutline, arrowForwardOutline, bedOutline, businessOutline, checkmarkCircleOutline, enterOutline, gridOutline, homeOutline, lockClosedOutline } from 'ionicons/icons';
 import { defaultFloorImage, defaultRoomImage, type BookingBed, type BookingFloor, type BookingRoom } from '../data/listings';
 
 type BookingListing = { name: string; type: string; price: number; image?: string };
@@ -84,7 +96,20 @@ const floors = computed(() => props.floors);
 const stepTitle = computed(() => step.value === 'floors' ? 'Choose a floor' : step.value === 'rooms' ? `${selectedFloor.value?.name} rooms` : `${selectedRoom.value?.name} layout`);
 const stepSummary = computed(() => step.value === 'floors' ? `${floors.value.length} ${floors.value.length === 1 ? 'floor' : 'floors'}` : step.value === 'rooms' ? `${selectedFloor.value?.rooms.length ?? 0} rooms` : `${selectedRoom.value?.beds.length ?? 0} beds`);
 const stepIcon = computed(() => step.value === 'floors' ? businessOutline : step.value === 'rooms' ? homeOutline : gridOutline);
-const gridCells = computed(() => Array.from({ length: (selectedRoom.value?.grid.rows ?? 0) * (selectedRoom.value?.grid.columns ?? 0) }, (_, index) => index));
+const gridCells = computed(() => {
+  const room = selectedRoom.value;
+  if (!room) return [];
+  return Array.from({ length: room.grid.rows * room.grid.columns }, (_, index) => {
+    const row = Math.floor(index / room.grid.columns) + 1;
+    const column = (index % room.grid.columns) + 1;
+    return {
+      id: `${row}-${column}`,
+      row,
+      column,
+      beds: room.beds.filter((bed) => bed.row === row && bed.column === column),
+    };
+  });
+});
 
 watch(() => props.listing.name, reset);
 watch(() => props.floors, reset);
@@ -149,12 +174,18 @@ function useFallback(event: Event, fallback: string) {
 .visual-card img { border-radius: 7px; display: block; height: 88px; object-fit: cover; width: 100%; }
 .card-title { align-items: center; display: flex; gap: 7px; margin-top: 9px; }.card-title strong { font-size: 10px; }.card-icon { align-items: center; background: #fff3e9; border-radius: 5px; color: #e2743e; display: inline-flex; height: 21px; justify-content: center; width: 21px; }.card-icon ion-icon { font-size: 12px; }
 .visual-card small { align-items: center; color: #718177; display: flex; font-size: 9px; gap: 4px; margin-top: 6px; }.visual-card small ion-icon { color: #4b9b61; font-size: 12px; }
-.bed-grid { background: #f3f6f1; border: 1px solid #dce7da; border-radius: 12px; display: grid; gap: 8px; grid-template-columns: repeat(var(--bed-columns), minmax(0, 1fr)); grid-template-rows: repeat(var(--bed-rows), minmax(0, 1fr)); min-height: 184px; padding: 14px; }
-.grid-cell { background: rgba(255,255,255,.62); border: 1px dashed #d2dfd2; border-radius: 8px; min-height: 0; min-width: 0; }
-.bed-marker { align-items: center; aspect-ratio: 1; background: #fff; border: 2px solid #76ae80; border-radius: 8px; color: #174b35; cursor: pointer; display: flex; flex-direction: column; font: inherit; grid-row: var(--bed-row); justify-self: center; justify-content: center; max-height: 68px; max-width: 68px; min-height: 0; min-width: 0; padding: 3px; transition: border-color .2s, transform .2s; width: 72%; }
+.bed-grid { background: #f3f6f1; border: 1px solid #dce7da; border-radius: 12px; display: grid; gap: 8px; grid-template-columns: repeat(var(--bed-columns), minmax(0, 1fr)); grid-template-rows: repeat(var(--bed-rows), minmax(88px, auto)); padding: 14px; }
+.grid-cell { align-items: center; background: rgba(255,255,255,.62); border: 1px dashed #d2dfd2; border-radius: 8px; display: flex; justify-content: center; min-height: 88px; min-width: 0; padding: 5px; position: relative; }
+.bed-stack { align-items: center; display: flex; flex-direction: column; gap: 5px; height: 100%; justify-content: center; width: 100%; }
+.door-marker { align-items: center; color: #e2743e; display: flex; flex-direction: column; font-size: 8px; gap: 2px; position: absolute; right: 5px; top: 5px; }
+.door-marker ion-icon { background: #fff3e9; border: 1px solid #f1c7a8; border-radius: 5px; font-size: 19px; padding: 3px; }
+.door-marker small { color: #b86a3f; font-size: 7px; font-weight: 700; }
+.bed-marker { align-items: center; aspect-ratio: 1; background: #fff; border: 2px solid #76ae80; border-radius: 8px; color: #174b35; cursor: pointer; display: flex; flex: 0 1 auto; flex-direction: column; font: inherit; justify-content: center; max-height: 68px; max-width: 68px; min-height: 0; min-width: 0; padding: 3px; transition: border-color .2s, transform .2s; width: 72%; }
+.bed-stack .bed-marker:only-child { flex: 0 0 auto; }
+.bed-stack .bed-marker:not(:only-child) { max-height: 52px; max-width: 52px; width: 58%; }
 .bed-marker:hover, .bed-marker:focus-visible { border-color: #e2743e; outline: 0; transform: translateY(-2px); }.bed-marker.occupied { border-color: #b7c1b8; cursor: not-allowed; }.bed-icon { color: #4b9b61; font-size: clamp(15px, 3vw, 23px); }.bed-marker.occupied .bed-icon { color: #9ba89f; }.bed-marker small { font-size: clamp(6px, 1.5vw, 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 .availability-legend { align-items: center; display: flex; flex-wrap: wrap; gap: 13px; margin-top: 14px; }.availability-legend span { align-items: center; color: #718177; display: flex; font-size: 9px; gap: 6px; }.availability-legend i { border-radius: 50%; height: 8px; width: 8px; }.availability-legend ion-icon { color: #87958b; font-size: 12px; }.available-dot { background: #4b9b61; }.occupied-dot { background: #b7c1b8; }
-.selected-booking { align-items: center; background: #fff; border: 1px solid #e5ebe4; border-radius: 12px; box-shadow: 0 8px 18px rgba(23,75,53,.08); display: flex; gap: 13px; margin-top: 18px; padding: 11px; }.selected-booking img { border-radius: 8px; height: 62px; object-fit: cover; width: 72px; }.selected-booking div { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }.ready-label { align-items: center; color: #e2743e; display: flex; font-size: 8px; font-weight: 700; gap: 4px; letter-spacing: 1px; }.ready-label ion-icon { font-size: 12px; }.selected-booking strong { font-size: 12px; }.selected-booking small { align-items: center; color: #87958b; display: flex; font-size: 9px; gap: 3px; }.selected-booking small ion-icon { color: #e2743e; font-size: 11px; }.selected-booking button { align-items: center; background: #e2743e; border-radius: 7px; color: #fff; display: flex; font-size: 9px; font-weight: 700; gap: 5px; padding: 11px 12px; white-space: nowrap; }.selected-booking ion-icon { font-size: 13px; }
+.selected-booking { align-items: center; background: #fff; border: 1px solid #e5ebe4; border-radius: 14px; box-shadow: 0 10px 22px rgba(23,75,53,.1); display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; padding: 15px; }.selected-booking img { border-radius: 10px; height: 96px; object-fit: cover; width: 112px; }.selected-booking > div:not(.selected-booking-history) { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }.ready-label { align-items: center; color: #e2743e; display: flex; font-size: 9px; font-weight: 700; gap: 5px; letter-spacing: 1px; }.ready-label ion-icon { font-size: 14px; }.selected-booking strong { font-family: 'Playfair Display', serif; font-size: 17px; line-height: 1.15; }.selected-booking small { align-items: center; color: #87958b; display: flex; font-size: 11px; gap: 4px; line-height: 1.35; }.selected-booking small ion-icon { color: #e2743e; font-size: 13px; }.selected-booking-history { border-top: 1px solid #edf1ec; flex-basis: 100%; padding-top: 12px; }.selected-booking-history strong { color: #174b35; display: block; font-family: 'DM Sans', sans-serif; font-size: 11px; }.selected-booking-history ul { color: #718177; font-size: 10px; line-height: 1.5; margin: 7px 0 0; padding-left: 17px; }.selected-booking-history li::marker { color: #e2743e; }.selected-booking button { align-items: center; background: #e2743e; border-radius: 8px; color: #fff; display: flex; font-size: 11px; font-weight: 700; gap: 6px; padding: 13px 15px; white-space: nowrap; }.selected-booking button:hover, .selected-booking button:focus-visible { background: #cf6332; outline: 0; }.selected-booking ion-icon { font-size: 15px; }
 .visual-step-enter-active, .visual-step-leave-active { transition: opacity .22s ease, transform .22s ease; }.visual-step-enter-from { opacity: 0; transform: translateX(14px); }.visual-step-leave-to { opacity: 0; transform: translateX(-14px); }
-@media (prefers-reduced-motion: reduce) { .visual-step-enter-active, .visual-step-leave-active { transition: none; } } @media (max-width: 580px) { .selected-booking { align-items: stretch; flex-wrap: wrap; }.selected-booking button { justify-content: center; width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .visual-step-enter-active, .visual-step-leave-active { transition: none; } } @media (max-width: 580px) { .selected-booking { align-items: stretch; flex-wrap: wrap; gap: 12px; padding: 12px; }.selected-booking img { height: 82px; width: 94px; }.selected-booking strong { font-size: 15px; }.selected-booking small { font-size: 10px; }.selected-booking button { justify-content: center; width: 100%; } }
 </style>

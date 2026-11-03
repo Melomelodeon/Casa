@@ -81,7 +81,7 @@
             <BookingPanel :listing="selectedListing" :floors="selectedFloors" @book="startBooking" />
             <div class="selected-listing-footer">
               <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
-              <a href="/listings">View space details <ion-icon :icon="arrowForwardOutline" /></a>
+              <a href="/listings">Back to listings <ion-icon :icon="arrowForwardOutline" /></a>
             </div>
           </div>
         </section>
