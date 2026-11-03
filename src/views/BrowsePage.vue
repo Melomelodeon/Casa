@@ -110,13 +110,40 @@
             integration.</div>
         </aside>
       </main>
+      <div v-if="selectedListing" class="listing-backdrop" @click.self="selectedListing = null">
+        <section class="selected-listing" role="dialog" aria-modal="true" aria-labelledby="selected-listing-title">
+          <button class="selected-close" type="button" aria-label="Close listing details" @click="selectedListing = null">×</button>
+          <div class="selected-listing-image" :style="{ backgroundImage: `url(${selectedListing.image})` }">
+            <span class="selected-label">SELECTED SPACE</span>
+          </div>
+          <div class="selected-listing-body">
+            <div class="selected-listing-heading">
+              <div>
+                <span class="eyebrow">{{ selectedListing.type }}</span>
+                <h2 id="selected-listing-title">{{ selectedListing.name }}</h2>
+                <p><ion-icon :icon="locationOutline" /> {{ selectedListing.location }}</p>
+              </div>
+              <span class="selected-rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span>
+            </div>
+            <p class="selected-description">{{ selectedListing.description }}</p>
+            <BookingPanel :listing="selectedListing" :spaces="selectedSpaces" @book="startBooking" />
+            <div class="selected-listing-footer">
+              <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
+              <a href="/listings">View space details <ion-icon :icon="arrowForwardOutline" /></a>
+            </div>
+          </div>
+        </section>
+      </div>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import BookingPanel, { type BookingSpace } from '../components/BookingPanel.vue';
+import { getBookingSpaces, listings, type Listing } from '../data/listings';
 import {
   arrowForwardOutline,
   calendarOutline,
@@ -136,47 +163,54 @@ import {
   walletOutline,
 } from 'ionicons/icons';
 
-type Listing = {
-  id: number;
-  name: string;
-  location: string;
-  price: number;
-  rating: string;
-  type: string;
-  amenities: number;
-  badge: string;
-  description: string;
-  image: string;
-};
-
-const listings: Listing[] = [
-  { id: 1, name: 'The Greenhouse', location: 'Katipunan, Quezon City', price: 8500, rating: '4.9', type: 'Private room', amenities: 8, badge: 'Casa favorite', description: 'A sun-filled room near campus with a warm, creative community.', image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=85' },
-  { id: 2, name: 'Sage House', location: 'Poblacion, Makati', price: 7200, rating: '4.8', type: 'Bedspace', amenities: 6, badge: 'New on Casa', description: 'Thoughtfully designed shared living in the heart of the city.', image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=85' },
-  { id: 3, name: 'Casa Amara', location: 'Cebu IT Park, Cebu', price: 9800, rating: '5.0', type: 'Private room', amenities: 10, badge: '', description: 'Your calm corner with everything you need close by.', image: 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=800&q=85' },
-  { id: 4, name: 'The Olive Room', location: 'Lahug, Cebu City', price: 6500, rating: '4.7', type: 'Bedspace', amenities: 7, badge: 'Great value', description: 'Easy, breezy living with a view and room to make it yours.', image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=85' },
-];
-
 const filters = [
   { label: 'All spaces', value: 'all', icon: sparklesOutline },
   { label: 'Private room', value: 'Private room', icon: homeOutline },
   { label: 'Bedspace', value: 'Bedspace', icon: personOutline },
   { label: 'Under ₱8k', value: 'under-8k', icon: walletOutline },
+  { label: '₱8k–₱10k', value: '8k-10k', icon: walletOutline },
 ];
-const mapPins = [1, 2, 3, 4];
-const pinPositions = [{ left: '29%', top: '40%' }, { left: '56%', top: '56%' }, { left: '73%', top: '29%' }, { left: '42%', top: '72%' }];
+const mapPins = [1, 2, 3, 4, 5, 6];
+const pinPositions = [
+  { left: '29%', top: '40%' },
+  { left: '56%', top: '56%' },
+  { left: '73%', top: '29%' },
+  { left: '42%', top: '72%' },
+  { left: '20%', top: '23%' },
+  { left: '78%', top: '70%' },
+];
 const searchTerm = ref('');
 const activeFilter = ref('all');
 const sortBy = ref('recommended');
-const selectedListing = ref<Listing | null>(listings[0]);
+const selectedListing = ref<Listing | null>(null);
 const favorites = ref(new Set<number>());
 const showFilters = ref(false);
 const showMapNotice = ref(false);
+const router = useRouter();
+const selectedSpaces = computed<BookingSpace[]>(() => selectedListing.value ? getBookingSpaces(selectedListing.value) : []);
+function startBooking(space: BookingSpace) {
+  if (!selectedListing.value) return;
+  void router.push({
+    name: 'Checkout',
+    query: {
+      listing: selectedListing.value.name,
+      location: selectedListing.value.location,
+      price: String(selectedListing.value.price),
+      type: selectedListing.value.type,
+      space: space.name,
+      image: space.image || selectedListing.value.image,
+    },
+  });
+}
 
 const filteredListings = computed(() => {
   const term = searchTerm.value.toLowerCase();
   const matches = listings.filter((listing) => {
     const matchesTerm = !term || `${listing.name} ${listing.location} ${listing.type}`.toLowerCase().includes(term);
-    const matchesFilter = activeFilter.value === 'all' || (activeFilter.value === 'under-8k' ? listing.price < 8000 : listing.type === activeFilter.value);
+    const matchesFilter = activeFilter.value === 'all'
+      || (activeFilter.value === 'under-8k' ? listing.price < 8000
+        : activeFilter.value === '8k-10k' ? listing.price >= 8000 && listing.price <= 10000
+          : listing.type === activeFilter.value);
     return matchesTerm && matchesFilter;
   });
   return [...matches].sort((a, b) => sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : sortBy.value === 'rating' ? Number(b.rating) - Number(a.rating) : a.id - b.id);
@@ -191,6 +225,7 @@ function toggleFavorite(id: number) {
 function clearFilters() {
   searchTerm.value = '';
   activeFilter.value = 'all';
+  sortBy.value = 'recommended';
 }
 </script>
 
@@ -458,6 +493,254 @@ function clearFilters() {
   border-color: #b6cfb7;
   box-shadow: 0 8px 20px rgba(23, 75, 53, .1);
   transform: translateY(-2px);
+}
+
+.listing-backdrop {
+  align-items: center;
+  background: rgba(15, 38, 27, .64);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 20;
+}
+
+.selected-listing {
+  background: #fff;
+  border: 1px solid #dce8dc;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(23, 75, 53, .09);
+  max-height: 90vh;
+  max-width: 540px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.selected-close {
+  align-items: center;
+  background: rgba(255, 255, 255, .92);
+  border-radius: 50%;
+  color: #174b35;
+  display: flex;
+  font-size: 21px;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 32px;
+  z-index: 1;
+}
+
+.selected-listing-image {
+  background-position: center;
+  background-size: cover;
+  height: 170px;
+  position: relative;
+}
+
+.selected-label {
+  background: #174b35;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  left: 13px;
+  letter-spacing: 1px;
+  padding: 7px 9px;
+  position: absolute;
+  top: 13px;
+}
+
+.selected-listing-image button {
+  align-items: center;
+  background: rgba(255, 255, 255, .92);
+  border-radius: 50%;
+  color: #174b35;
+  display: flex;
+  font-size: 20px;
+  height: 30px;
+  justify-content: center;
+  position: absolute;
+  right: 13px;
+  top: 13px;
+  width: 30px;
+}
+
+.selected-listing-body {
+  padding: 17px;
+}
+
+.selected-listing-heading {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.selected-listing-heading h2 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  margin: 6px 0 4px;
+}
+
+.selected-listing-heading p,
+.selected-description {
+  color: #829088;
+  font-size: 10px;
+  margin: 0;
+}
+
+.selected-listing-heading p ion-icon {
+  color: #e2743e;
+  vertical-align: middle;
+}
+
+.selected-rating {
+  color: #174b35;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.selected-rating ion-icon {
+  color: #e2743e;
+  vertical-align: middle;
+}
+
+.selected-description {
+  line-height: 1.5;
+  margin-top: 13px;
+}
+
+.visual-heading {
+  align-items: center;
+  border-bottom: 1px solid #edf1ec;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 17px;
+  padding-bottom: 9px;
+}
+
+.visual-heading strong {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+}
+
+.visual-heading span {
+  color: #89968d;
+  font-size: 9px;
+}
+
+.room-preview {
+  background: #f3f6f1;
+  border: 1px solid #dce7da;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.visual-space {
+  background: #fff;
+  border: 2px solid #76ae80;
+  border-radius: 7px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px;
+}
+
+.visual-space.occupied {
+  border-color: #b7c1b8;
+}
+
+.visual-space img {
+  border-radius: 4px;
+  height: 58px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.visual-space strong {
+  color: #174b35;
+  font-size: 8px;
+  margin-top: 5px;
+}
+
+.visual-space small {
+  color: #4b9b61;
+  font-size: 8px;
+  margin-top: 2px;
+}
+
+.visual-space.occupied small {
+  color: #89968d;
+}
+
+.availability-legend {
+  display: flex;
+  gap: 13px;
+  margin-top: 9px;
+}
+
+.availability-legend span {
+  align-items: center;
+  color: #89968d;
+  display: flex;
+  font-size: 8px;
+  gap: 4px;
+}
+
+.availability-legend i {
+  border-radius: 50%;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
+.available-dot {
+  background: #4b9b61;
+}
+
+.occupied-dot {
+  background: #b7c1b8;
+}
+
+.selected-listing-footer {
+  align-items: center;
+  border-top: 1px solid #edf1ec;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 13px;
+}
+
+.selected-listing-footer strong {
+  color: #174b35;
+  font-size: 16px;
+}
+
+.selected-listing-footer small {
+  color: #89968d;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.selected-listing-footer a {
+  align-items: center;
+  color: #e2743e;
+  display: flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 5px;
+  text-decoration: none;
 }
 
 .listing-image {
@@ -913,6 +1196,16 @@ function clearFilters() {
     padding: 30px 18px;
   }
 
+  .listing-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .selected-listing {
+    border-radius: 14px 14px 0 0;
+    max-height: 88vh;
+  }
+
   .results-top {
     align-items: start;
     flex-direction: column;
@@ -929,6 +1222,16 @@ function clearFilters() {
 
   .listing-image {
     min-height: 170px;
+  }
+
+  .selected-listing-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .selected-listing-footer a {
+    width: 100%;
   }
 
   .listing-meta span:nth-child(2),

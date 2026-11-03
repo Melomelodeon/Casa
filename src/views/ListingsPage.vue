@@ -59,26 +59,26 @@
           <a href="/signup?role=landlord">Become a Casa host <ion-icon :icon="arrowForwardOutline" /></a>
         </section>
       </main>
-      <div v-if="selectedListing" class="detail-backdrop" @click.self="selectedListing = null">
-        <section class="detail-panel" role="dialog" aria-modal="true" :aria-labelledby="`detail-${selectedListing.id}`">
-          <button class="detail-close" type="button" aria-label="Close listing details" @click="selectedListing = null">×</button>
-          <img class="detail-image" :src="selectedListing.image || defaultListingImage" :alt="selectedListing.name" @error="useDefaultImage" />
-          <div class="detail-body">
-            <span class="eyebrow">{{ selectedListing.type === 'Private room' ? 'PRIVATE ROOM' : 'BEDSPACE' }}</span>
-            <div class="detail-title"><div><h2 :id="`detail-${selectedListing.id}`">{{ selectedListing.name }}</h2><p class="location"><ion-icon :icon="locationOutline" /> {{ selectedListing.location }}</p></div><span class="rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span></div>
-            <p class="detail-description">{{ selectedListing.description }}</p>
-            <div class="visual-heading"><strong>{{ selectedListing.type === 'Private room' ? 'Room visualization' : 'Bedspace visualization' }}</strong><span>{{ selectedListing.type === 'Private room' ? 'Beds inside: 1' : 'Shared sleeping spaces' }}</span></div>
-            <div class="room-preview">
-              <button v-for="space in selectedSpaces" :key="space.name" class="visual-bed" :class="{ occupied: space.status === 'occupied', selected: selectedSpace?.name === space.name, 'rejected-click': rejectedSpace === space.name }" type="button" :aria-disabled="space.status === 'occupied' ? 'true' : undefined" :aria-label="`${space.name}, ${space.status === 'occupied' ? 'occupied' : 'available'}`" :aria-pressed="selectedSpace?.name === space.name" @click="selectSpace(space)">
-                <img :src="space.image || defaultListingImage" :alt="space.name" @error="useDefaultImage" />
-                <b>{{ space.name }}</b><small>{{ space.status === 'occupied' ? 'Occupied' : 'Available' }}</small>
-              </button>
+      <div v-if="selectedListing" class="listing-backdrop" @click.self="selectedListing = null">
+        <section class="selected-listing" role="dialog" aria-modal="true" aria-labelledby="selected-listing-title">
+          <button class="selected-close" type="button" aria-label="Close listing details" @click="selectedListing = null">×</button>
+          <div class="selected-listing-image" :style="{ backgroundImage: `url(${selectedListing.image})` }">
+            <span class="selected-label">SELECTED SPACE</span>
+          </div>
+          <div class="selected-listing-body">
+            <div class="selected-listing-heading">
+              <div>
+                <span class="eyebrow">{{ selectedListing.type }}</span>
+                <h2 id="selected-listing-title">{{ selectedListing.name }}</h2>
+                <p><ion-icon :icon="locationOutline" /> {{ selectedListing.location }}</p>
+              </div>
+              <span class="selected-rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span>
             </div>
-            <div class="detail-status"><span><i class="free-dot" /> Available</span><span><i class="busy-dot" /> Occupied</span></div>
-            <div v-if="selectedSpace" class="booking-panel">
-              <img :src="selectedSpace.image || defaultListingImage" :alt="selectedSpace.name" @error="useDefaultImage" />
-              <div class="booking-info"><span class="eyebrow">READY TO BOOK</span><strong>{{ selectedSpace.name }}</strong><small>{{ selectedListing.name }} · ₱{{ selectedListing.price.toLocaleString() }} / month</small></div>
-              <button type="button" class="booking-button" @click="startBooking">Continue booking <ion-icon :icon="arrowForwardOutline" /></button>
+            <p class="selected-description">{{ selectedListing.description }}</p>
+            <BookingPanel :listing="selectedListing" :spaces="selectedSpaces" @book="startBooking" />
+            <div class="selected-listing-footer">
+              <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
+              <a href="/listings">View space details <ion-icon :icon="arrowForwardOutline" /></a>
             </div>
           </div>
         </section>
@@ -91,28 +91,17 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import BookingPanel, { type BookingSpace } from '../components/BookingPanel.vue';
+import { defaultListingImage, getBookingSpaces, listings, type Listing } from '../data/listings';
 import { arrowForwardOutline, heart, heartOutline, locationOutline, mapOutline, optionsOutline, personOutline, searchOutline, star } from 'ionicons/icons';
 
-type Listing = { id: number; name: string; location: string; price: number; rating: string; type: string; badge: string; description: string; image?: string };
-type VisualSpace = { name: string; status: 'available' | 'occupied'; image?: string };
-const defaultListingImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
-const listings: Listing[] = [
-  { id: 1, name: 'The Greenhouse', location: 'Katipunan, Quezon City', price: 8500, rating: '4.9', type: 'Private room', badge: 'Casa favorite', description: 'A sun-filled room near campus with a warm, creative community.', image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=85' },
-  { id: 2, name: 'Sage House', location: 'Poblacion, Makati', price: 7200, rating: '4.8', type: 'Bedspace', badge: 'New on Casa', description: 'Thoughtfully designed shared living in the heart of the city.', image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=85' },
-  { id: 3, name: 'Casa Amara', location: 'Cebu IT Park, Cebu', price: 9800, rating: '5.0', type: 'Private room', badge: '', description: 'Your calm corner with everything you need close by.', image: 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85' },
-  { id: 4, name: 'The Olive Room', location: 'Lahug, Cebu City', price: 6500, rating: '4.7', type: 'Bedspace', badge: 'Great value', description: 'Easy, breezy living with a view and room to make it yours.', image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=85' },
-  { id: 5, name: 'Moss & Morning', location: 'Diliman, Quezon City', price: 7900, rating: '4.9', type: 'Private room', badge: '', description: 'A quiet, plant-filled home base for busy city days.', image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=85' },
-  { id: 6, name: 'The Nook', location: 'Taft, Manila', price: 5800, rating: '4.6', type: 'Bedspace', badge: 'Budget pick', description: 'Simple, bright, and close to everything you need.', image: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=900&q=85' },
-];
+type VisualSpace = BookingSpace;
 const searchTerm = ref('');
 const typeFilter = ref('all');
 const budgetFilter = ref('all');
 const sortBy = ref('recommended');
 const favorites = ref(new Set<number>());
 const selectedListing = ref<Listing | null>(null);
-const selectedSpace = ref<VisualSpace | null>(null);
-const rejectedSpace = ref<string | null>(null);
-let rejectedSpaceTimer: number | undefined;
 const router = useRouter();
 const filteredListings = computed(() => {
   const term = searchTerm.value.toLowerCase();
@@ -131,24 +120,9 @@ function toggleFavorite(id: number) {
 }
 function openListing(listing: Listing) {
   selectedListing.value = listing;
-  selectedSpace.value = null;
 }
-function selectSpace(space: VisualSpace) {
-  if (space.status === 'occupied') {
-    rejectedSpace.value = null;
-    window.requestAnimationFrame(() => {
-      rejectedSpace.value = space.name;
-    });
-    window.clearTimeout(rejectedSpaceTimer);
-    rejectedSpaceTimer = window.setTimeout(() => {
-      rejectedSpace.value = null;
-    }, 420);
-    return;
-  }
-  selectedSpace.value = selectedSpace.value?.name === space.name ? null : space;
-}
-function startBooking() {
-  if (!selectedSpace.value || !selectedListing.value) return;
+function startBooking(space: BookingSpace) {
+  if (!selectedListing.value) return;
   void router.push({
     name: 'Checkout',
     query: {
@@ -156,25 +130,12 @@ function startBooking() {
       location: selectedListing.value.location,
       price: String(selectedListing.value.price),
       type: selectedListing.value.type,
-      space: selectedSpace.value.name,
-      image: selectedSpace.value.image || selectedListing.value.image || defaultListingImage,
+      space: space.name,
+      image: space.image || selectedListing.value.image || defaultListingImage,
     },
   });
 }
-const selectedSpaces = computed<VisualSpace[]>(() => {
-  if (!selectedListing.value) return [];
-  return selectedListing.value.type === 'Private room'
-    ? [{ name: 'Private bed', status: 'available' as const, image: selectedListing.value.image }]
-    : [
-        { name: 'Bed 01', status: 'available' as const },
-        { name: 'Bed 02', status: 'occupied' as const },
-        { name: 'Bed 03', status: 'available' as const },
-      ];
-});
-function useDefaultImage(event: Event) {
-  const image = event.target as HTMLImageElement;
-  image.src = defaultListingImage;
-}
+const selectedSpaces = computed<VisualSpace[]>(() => selectedListing.value ? getBookingSpaces(selectedListing.value) : []);
 function clearFilters() {
   searchTerm.value = '';
   typeFilter.value = 'all';
@@ -204,4 +165,25 @@ function clearFilters() {
 .sort-filter { flex: 0 0 155px; }
 @media (max-width: 850px) { .select-filter, .sort-filter { padding: 8px 12px; } }
 @media (max-width: 580px) { .select-filter, .sort-filter { border-bottom: 1px solid #e8ece7; border-left: 0; min-height: 0; padding: 12px 10px; }.sort-filter { border-bottom: 0; flex-basis: auto; } }
+
+.listing-backdrop { align-items: center; background: rgba(15, 38, 27, .64); display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 20; }
+.selected-listing { background: #fff; border: 1px solid #dce8dc; border-radius: 12px; box-shadow: 0 10px 24px rgba(23, 75, 53, .09); max-height: 90vh; max-width: 540px; overflow: hidden; position: relative; width: 100%; }
+.selected-close { align-items: center; background: rgba(255, 255, 255, .92); border-radius: 50%; color: #174b35; display: flex; font-size: 21px; height: 32px; justify-content: center; position: absolute; right: 14px; top: 14px; width: 32px; z-index: 1; }
+.selected-listing-image { background-position: center; background-size: cover; height: 170px; position: relative; }
+.selected-label { background: #174b35; border-radius: 4px; color: #fff; font-size: 9px; font-weight: 700; left: 13px; letter-spacing: 1px; padding: 7px 9px; position: absolute; top: 13px; }
+.selected-listing-body { padding: 17px; }
+.selected-listing-heading { align-items: start; display: flex; justify-content: space-between; }
+.selected-listing-heading h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 24px; margin: 6px 0 4px; }
+.selected-listing-heading p, .selected-description { color: #829088; font-size: 10px; margin: 0; }
+.selected-listing-heading p ion-icon { color: #e2743e; vertical-align: middle; }
+.selected-rating { color: #174b35; font-size: 11px; font-weight: 700; }
+.selected-rating ion-icon { color: #e2743e; vertical-align: middle; }
+.selected-description { line-height: 1.5; margin-top: 13px; }
+.selected-listing-footer { align-items: center; border-top: 1px solid #edf1ec; display: flex; justify-content: space-between; margin-top: 15px; padding-top: 13px; }
+.selected-listing-footer strong { color: #174b35; font-size: 16px; }
+.selected-listing-footer small { color: #89968d; font-size: 9px; font-weight: 400; }
+.selected-listing-footer a { align-items: center; color: #e2743e; display: flex; font-size: 10px; font-weight: 700; gap: 5px; text-decoration: none; }
+.selected-listing-footer a ion-icon { font-size: 13px; }
+@media (max-width: 580px) { .listing-backdrop { align-items: end; padding: 0; }.selected-listing { border-radius: 14px 14px 0 0; max-height: 92vh; }.selected-listing-image { height: 145px; }.selected-listing-body { padding: 15px; } }
+.listing-backdrop .booking-panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; display: block; margin: 0; padding: 0; }
 </style>
