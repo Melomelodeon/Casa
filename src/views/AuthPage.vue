@@ -48,7 +48,7 @@
               </button>
             </div>
 
-            <form class="auth-form" @submit.prevent="submitted = true">
+            <form class="auth-form" @submit.prevent="submitForm">
               <label v-if="!isLogin">
                 <span>Full name</span>
                 <div class="input-wrap"><ion-icon :icon="personOutline" /><input v-model="fullName" type="text" placeholder="Your full name" required /></div>
@@ -69,10 +69,13 @@
                 <label class="remember-check"><input type="checkbox" /> <span>Remember me</span></label>
                 <a href="#forgot-password">Forgot password?</a>
               </div>
-              <button class="primary-action" type="submit">{{ isLogin ? 'Log in to Casa' : `Create ${role} account` }} <ion-icon :icon="arrowForwardOutline" /></button>
+              <button class="primary-action" type="submit" :disabled="isSubmitting">
+                {{ isSubmitting ? isLogin ? 'Logging in...' : 'Creating account...' : isLogin ? 'Log in to Casa' : `Create ${role} account` }}
+                <ion-icon v-if="!isSubmitting" :icon="arrowForwardOutline" />
+              </button>
             </form>
 
-            <p v-if="submitted" class="form-message" role="status">Thanks! Your Casa account is ready to connect.</p>
+            <p v-if="formMessage" class="form-message" :class="{ error: formError }" role="status">{{ formMessage }}</p>
             <p class="switch-mode">{{ isLogin ? 'New to Casa?' : 'Already have an account?' }} <a :href="isLogin ? `/signup?role=${role}` : `/login?role=${role}`">{{ isLogin ? 'Create an account' : 'Log in' }}</a></p>
           </div>
         </section>
@@ -97,6 +100,7 @@ import {
   searchOutline,
   sparklesOutline,
 } from 'ionicons/icons';
+import { getSupabaseClient } from '../lib/supabase';
 
 type Role = 'tenant' | 'landlord';
 
@@ -108,12 +112,91 @@ const email = ref('');
 const password = ref('');
 const showPassword = ref(false);
 const submitted = ref(false);
+const isSubmitting = ref(false);
+const formMessage = ref('');
+const formError = ref(false);
 const isLogin = computed(() => route.path === '/login');
 
 function setRole(nextRole: Role) {
   role.value = nextRole;
   submitted.value = false;
+  formMessage.value = '';
+  formError.value = false;
   void router.replace({ query: { ...route.query, role: nextRole } });
+}
+
+async function submitForm() {
+  submitted.value = false;
+  formMessage.value = '';
+  formError.value = false;
+
+  if (isLogin.value) {
+    await login();
+  } else {
+    await register();
+  }
+}
+
+async function login() {
+  isSubmitting.value = true;
+
+  try {
+    const { error, data } = await getSupabaseClient().auth.signInWithPassword({
+      email: email.value.trim(),
+      password: password.value,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    submitted.value = true;
+    const accountRole = data.user.user_metadata?.role;
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
+    const destination = redirect.startsWith('/') && !redirect.startsWith('//')
+      ? redirect
+      : accountRole === 'landlord' ? '/host' : '/browse';
+    await router.replace(destination);
+  } catch (error) {
+    formError.value = true;
+    formMessage.value = error instanceof Error ? error.message : 'Unable to log in. Please check your credentials.';
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+async function register() {
+  isSubmitting.value = true;
+
+  try {
+    const { error, data } = await getSupabaseClient().auth.signUp({
+      email: email.value.trim(),
+      password: password.value,
+      options: {
+        data: {
+          full_name: fullName.value.trim(),
+          role: role.value,
+        },
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    submitted.value = true;
+    formMessage.value = data.session
+      ? 'Your Casa account is ready. Welcome!'
+      : 'Account created. Check your email to confirm your account.';
+    fullName.value = '';
+    email.value = '';
+    password.value = '';
+  } catch (error) {
+    formError.value = true;
+    formMessage.value = error instanceof Error ? error.message : 'Unable to create your account. Please try again.';
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 </script>
 
@@ -132,6 +215,7 @@ function setRole(nextRole: Role) {
 .auth-panel { padding: 33px clamp(30px, 7vw, 110px); }.back-link { align-items: center; color: #7d8e84; display: inline-flex; font-size: 12px; gap: 6px; text-decoration: none; }.back-link:hover { color: #e2743e; }.back-link ion-icon { font-size: 16px; }.auth-form-wrap { margin: clamp(65px, 11vh, 120px) auto 50px; max-width: 430px; }.eyebrow { color: #e2743e; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }.auth-heading h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: clamp(34px, 4vw, 47px); letter-spacing: -1.8px; line-height: 1.05; margin: 15px 0 9px; }.auth-heading p { color: #839087; font-size: 13px; margin: 0 0 26px; }
 .role-switch { background: #f0f1ec; border-radius: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; }.role-switch button { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 7px; color: #849088; display: flex; gap: 9px; padding: 10px 8px; text-align: left; }.role-switch button.active { background: white; border-color: #e3e8df; box-shadow: 0 3px 9px rgba(23,75,53,.06); color: #174b35; }.role-switch ion-icon { color: #e2743e; font-size: 19px; }.role-switch span { display: flex; flex-direction: column; }.role-switch strong { font-size: 11px; }.role-switch small { font-size: 9px; margin-top: 3px; }
 .auth-form { display: flex; flex-direction: column; gap: 16px; margin-top: 25px; }.auth-form label > span, .remember-check span { color: #52675b; font-size: 11px; font-weight: 600; }.input-wrap { align-items: center; border: 1px solid #e2e8e1; border-radius: 8px; display: flex; gap: 9px; margin-top: 7px; padding: 0 12px; transition: border-color .2s, box-shadow .2s; }.input-wrap:focus-within { border-color: #6d9b76; box-shadow: 0 0 0 3px rgba(109,155,118,.12); }.input-wrap > ion-icon { color: #8ca196; font-size: 17px; }.input-wrap input { background: transparent; border: 0; color: #174b35; flex: 1; font: inherit; font-size: 12px; height: 43px; min-width: 0; outline: 0; }.input-wrap input::placeholder { color: #aab6ad; }.password-toggle { background: transparent; color: #8ca196; display: flex; font-size: 16px; padding: 4px; }.form-options { align-items: center; display: flex; justify-content: space-between; margin-top: -4px; }.form-options a, .terms-check a, .switch-mode a { color: #e2743e; font-weight: 700; text-decoration: none; }.remember-check, .terms-check { align-items: flex-start; display: flex; gap: 7px; }.remember-check input, .terms-check input { accent-color: #e2743e; margin: 1px 0 0; }.form-options a { font-size: 10px; }.terms-check span { font-size: 10px !important; font-weight: 400 !important; line-height: 1.4; }.primary-action { align-items: center; background: #e2743e; border-radius: 8px; color: white; display: flex; font-size: 12px; font-weight: 700; justify-content: center; margin-top: 4px; padding: 14px; transition: background .2s, transform .2s; }.primary-action:hover { background: #c95f2d; transform: translateY(-2px); }.primary-action ion-icon { font-size: 16px; margin-left: 8px; }.form-message { background: #e6f2e4; border-radius: 7px; color: #3e7650; font-size: 11px; margin: 14px 0 0; padding: 10px; text-align: center; }.switch-mode { color: #8b9890; font-size: 11px; margin: 23px 0 0; text-align: center; }
+.primary-action:disabled { cursor: wait; opacity: .7; }.form-message.error { background: #fce8e5; color: #a33b2d; }
 @media (max-width: 760px) { .auth-shell { display: block; }.auth-showcase { min-height: 230px; padding: 24px; }.auth-showcase::before { height: 300px; left: 55%; top: -200px; width: 300px; }.auth-showcase::after { height: 130px; right: -65px; top: -55px; width: 130px; }.showcase-copy { margin: 40px 0 0; }.showcase-copy h1 { font-size: 40px; margin: 10px 0; }.showcase-copy p { display: none; }.showcase-card, .showcase-note { display: none; }.auth-panel { padding: 25px 24px 40px; }.auth-form-wrap { margin: 52px auto 0; } }
 @media (max-width: 400px) { .role-switch button { gap: 5px; padding: 9px 5px; }.role-switch strong { font-size: 10px; }.role-switch small { font-size: 8px; } }
 </style>

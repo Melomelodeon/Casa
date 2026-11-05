@@ -224,6 +224,7 @@ function startBooking(space: BookingBed) {
   void router.push({
     name: 'Checkout',
     query: {
+      listingId: String(selectedListing.value.id),
       listing: selectedListing.value.name,
       location: selectedListing.value.location,
       price: String(selectedListing.value.price),

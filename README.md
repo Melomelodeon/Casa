@@ -20,6 +20,17 @@ Casa is a mobile-first web application designed to streamline the process of dis
 * **CI/CD Pipeline:** GitHub Actions (Automated Android APK Build)
 * **Version Control:** Git & GitHub
 
+## Local Supabase setup
+
+Registration uses Supabase Authentication. Copy `.env.example` to `.env` and set:
+
+* `VITE_SUPABASE_URL` to the project URL from Supabase Settings > API.
+* `VITE_SUPABASE_ANON_KEY` to the project’s publishable/anon key from Supabase Settings > API.
+
+The signup form stores the selected account type and full name in the new Auth user’s metadata as `role` and `full_name`. If email confirmation is enabled in Supabase, users must confirm their email before signing in.
+
+Run [`supabase/bookings.sql`](./supabase/bookings.sql) in the Supabase SQL Editor to enable booking requests. A signed-in user is required before checkout, and each request is recorded with that user’s Auth ID as `tenant_id`.
+
 ## System Architecture and Features
 
 ### 1. Authentication and Authorization
