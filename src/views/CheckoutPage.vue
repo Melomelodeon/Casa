@@ -51,7 +51,7 @@
             <label>Message to host <span class="optional">(optional)</span><textarea v-model.trim="form.message" rows="3" placeholder="Tell the host a little about yourself..." /></label>
             <label class="terms"><input v-model="form.agreed" required type="checkbox" /><span>I agree to Casa's booking guidelines and understand this is a request, not a confirmed reservation.</span></label>
             <button class="submit-button" type="submit" :disabled="isSubmitting">
-              {{ isSubmitting ? 'Sending request...' : 'Send booking request' }}
+              {{ isSubmitting ? 'Opening payment...' : 'Continue to payment' }}
               <ion-icon v-if="!isSubmitting" :icon="arrowForwardOutline" />
             </button>
             <p class="secure-note"><ion-icon :icon="shieldCheckmarkOutline" /> Your information is only shared with this host.</p>
@@ -65,12 +65,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { arrowForwardOutline, checkmarkOutline, locationOutline, shieldCheckmarkOutline } from 'ionicons/icons';
 import { getSupabaseClient } from '../lib/supabase';
 
 const route = useRoute();
+const router = useRouter();
 const defaultImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
 const booking = computed(() => ({
   listingId: Number(route.query.listingId) || 0,
@@ -110,17 +111,7 @@ async function submitBooking() {
       throw new Error('This listing is missing its ID. Please return to the listings page and try again.');
     }
 
-    const { error } = await getSupabaseClient().from('bookings').insert({
-      tenant_id: user.id,
-      listing_id: booking.value.listingId,
-      payment_status: 'pending',
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    submitted.value = true;
+    await router.push({ name: 'Payment', query: route.query });
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to send your booking request.';
   } finally {

@@ -4,7 +4,7 @@
       <header class="host-header">
         <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
         <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a href="/host/spaces">My spaces</a><a class="active" href="/host/requests">Requests <span class="nav-count">2</span></a></nav>
-        <div class="host-account"><span class="avatar">JM</span><span class="host-name">Jamie M.</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
+        <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
       <main class="host-shell">
         <div class="page-heading"><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">BOOKING INBOX</span><h1>Requests.</h1><p>Review potential residents and find the right fit for your spaces.</p></div><span class="pending-summary"><strong>{{ pendingCount }}</strong> pending review</span></div>
@@ -29,11 +29,15 @@ import { computed, ref } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { checkmarkOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
+import { useAuthUser } from '../composables/useAuthUser';
 
 type RequestStatus = 'pending' | 'approved' | 'declined';
 type BookingRequest = { name: string; initials: string; requested: string; space: string; moveIn: string; price: number; message: string; status: RequestStatus };
 const selectedTab = ref('all');
 const { logout } = useLogout();
+const { user } = useAuthUser();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
+const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const spaceFilter = ref('all');
 const notice = ref('');
 const requests = ref<BookingRequest[]>([

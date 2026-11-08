@@ -4,7 +4,7 @@
       <header class="host-header">
         <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
         <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a class="active" href="/host/spaces">My spaces</a><a href="/host/requests">Requests <span class="nav-count">2</span></a></nav>
-        <div class="host-account"><span class="avatar">JM</span><span class="host-name">Jamie M.</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
+        <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
       <main class="host-shell">
         <div class="page-heading"><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">YOUR CASA SPACES</span><h1>My spaces.</h1><p>Keep your listings fresh, accurate, and ready for their next resident.</p></div><a class="primary-button" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Add a space</a></div>
@@ -27,9 +27,13 @@ import { computed, ref } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { addOutline, locationOutline, searchOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
+import { useAuthUser } from '../composables/useAuthUser';
 
 const search = ref('');
 const { logout } = useLogout();
+const { user } = useAuthUser();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
+const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const filter = ref('all');
 const notice = ref('');
 const spaces = [

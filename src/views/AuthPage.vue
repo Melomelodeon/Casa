@@ -37,7 +37,7 @@
               <p>{{ isLogin ? 'Log in to continue your Casa journey.' : 'Create an account and find your place.' }}</p>
             </div>
 
-            <div class="role-switch" aria-label="Choose account type">
+            <div v-if="!isLogin" class="role-switch" aria-label="Choose account type">
               <button type="button" :class="{ active: role === 'tenant' }" @click="setRole('tenant')">
                 <ion-icon :icon="searchOutline" />
                 <span><strong>I’m a tenant</strong><small>Looking for a space</small></span>

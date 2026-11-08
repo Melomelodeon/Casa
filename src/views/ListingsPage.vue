@@ -9,7 +9,11 @@
         <nav class="header-nav">
           <a href="/browse"><ion-icon :icon="mapOutline" /> Explore map</a>
           <a href="/signup?role=landlord">List your space</a>
-          <a class="account-link" href="/login?role=tenant"><ion-icon :icon="personOutline" /> Log in</a>
+          <template v-if="user">
+            <a class="account-link" :href="accountPath"><ion-icon :icon="personOutline" /> {{ displayName }}</a>
+            <button class="logout-button" type="button" @click="logout">Log out</button>
+          </template>
+          <a v-else class="account-link" href="/login?role=tenant"><ion-icon :icon="personOutline" /> Log in</a>
         </nav>
       </header>
 
@@ -95,7 +99,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import BookingPanel from '../components/BookingPanel.vue';
-import { defaultListingImage, getBookingFloors, listings, type BookingBed, type Listing } from '../data/listings';
+import { useAuthUser } from '../composables/useAuthUser';
+import { useLogout } from '../composables/useLogout';
+import { defaultListingImage, getBookingFloors, listings, type BookingSelection, type Listing } from '../data/listings';
 import { arrowForwardOutline, heart, heartOutline, locationOutline, mapOutline, optionsOutline, personOutline, searchOutline, star } from 'ionicons/icons';
 
 const searchTerm = ref('');
@@ -109,6 +115,10 @@ const hasScrollableContent = ref(false);
 const scrollIndicatorDismissed = ref(false);
 let selectedListingResizeObserver: ResizeObserver | null = null;
 const router = useRouter();
+const { user } = useAuthUser();
+const { logout } = useLogout();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
+const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
 function updateScrollIndicator() {
   const element = selectedListingElement.value;
   hasScrollableContent.value = Boolean(element && element.scrollHeight > element.clientHeight + 1);
@@ -151,7 +161,7 @@ function toggleFavorite(id: number) {
 function openListing(listing: Listing) {
   selectedListing.value = listing;
 }
-function startBooking(space: BookingBed) {
+function startBooking(selection: BookingSelection) {
   if (!selectedListing.value) return;
   void router.push({
     name: 'Checkout',
@@ -161,8 +171,8 @@ function startBooking(space: BookingBed) {
       location: selectedListing.value.location,
       price: String(selectedListing.value.price),
       type: selectedListing.value.type,
-      space: space.name,
-      image: space.image || selectedListing.value.image || defaultListingImage,
+      space: selection.value.name,
+      image: selection.value.image || selectedListing.value.image || defaultListingImage,
     },
   });
 }
@@ -219,4 +229,5 @@ function clearFilters() {
 @media (max-width: 580px) { .listing-backdrop { align-items: end; padding: 0; }.selected-listing { border-radius: 14px 14px 0 0; max-height: 92vh; }.selected-listing-image { height: 145px; }.selected-listing-body { padding: 15px; } }
 @keyframes scroll-hint { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 5px); } }
 @media (prefers-reduced-motion: reduce) { .scroll-indicator { animation: none; } }
+.logout-button { background: transparent; border: 0; color: #849087; cursor: pointer; font: inherit; font-size: 10px; padding: 0; }.logout-button:hover { color: #e2743e; }
 </style>

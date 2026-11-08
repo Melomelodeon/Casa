@@ -8,7 +8,7 @@
           <a href="/host/spaces">My spaces</a>
           <a href="/host/requests">Requests <span class="nav-count">2</span></a>
         </nav>
-        <div class="host-account"><span class="avatar">JM</span><span class="host-name">Jamie M.</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
+        <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
 
       <main class="host-shell">
@@ -58,13 +58,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { addOutline, arrowForwardOutline, calendarOutline, homeOutline, locationOutline, starOutline, walletOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
+import { useAuthUser } from '../composables/useAuthUser';
 
 const notice = ref('');
 const { logout } = useLogout();
+const { user } = useAuthUser();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
+const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const requests = [
   { name: 'Alex Reyes', initials: 'AR', space: 'Bed 03 · Sage House', date: 'Nov 01' },
   { name: 'Mika Santos', initials: 'MS', space: 'Private bed · The Greenhouse', date: 'Nov 15' },

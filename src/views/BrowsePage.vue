@@ -18,7 +18,11 @@
         <nav class="header-actions" aria-label="Account navigation">
           <a href="/listings">Browse all listings</a>
           <a href="/signup?role=landlord">List your space</a>
-          <a class="profile-button" href="/login?role=tenant"><ion-icon :icon="personOutline" /> Log in</a>
+          <template v-if="user">
+            <a class="profile-button" :href="accountPath"><ion-icon :icon="personOutline" /> {{ displayName }}</a>
+            <button class="logout-button" type="button" @click="logout">Log out</button>
+          </template>
+          <a v-else class="profile-button" href="/login?role=tenant"><ion-icon :icon="personOutline" /> Log in</a>
           <button class="mobile-filter-button" type="button" @click="showFilters = !showFilters"><ion-icon
               :icon="optionsOutline" /></button>
         </nav>
@@ -146,7 +150,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import BookingPanel from '../components/BookingPanel.vue';
-import { getBookingFloors, listings, type BookingBed, type Listing } from '../data/listings';
+import { useAuthUser } from '../composables/useAuthUser';
+import { useLogout } from '../composables/useLogout';
+import { getBookingFloors, listings, type BookingSelection, type Listing } from '../data/listings';
 import {
   arrowForwardOutline,
   calendarOutline,
@@ -194,6 +200,10 @@ const favorites = ref(new Set<number>());
 const showFilters = ref(false);
 const showMapNotice = ref(false);
 const router = useRouter();
+const { user } = useAuthUser();
+const { logout } = useLogout();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
+const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
 function updateScrollIndicator() {
   const element = selectedListingElement.value;
@@ -219,7 +229,7 @@ watch(selectedListing, (listing) => {
   });
 });
 onBeforeUnmount(() => selectedListingResizeObserver?.disconnect());
-function startBooking(space: BookingBed) {
+function startBooking(selection: BookingSelection) {
   if (!selectedListing.value) return;
   void router.push({
     name: 'Checkout',
@@ -229,8 +239,8 @@ function startBooking(space: BookingBed) {
       location: selectedListing.value.location,
       price: String(selectedListing.value.price),
       type: selectedListing.value.type,
-      space: space.name,
-      image: space.image || selectedListing.value.image,
+      space: selection.value.name,
+      image: selection.value.image || selectedListing.value.image,
     },
   });
 }
@@ -397,6 +407,8 @@ function clearFilters() {
   gap: 6px;
   padding: 10px 14px;
 }
+.logout-button { background: transparent; border: 0; color: #849087; cursor: pointer; font: inherit; font-size: 10px; padding: 0; }
+.logout-button:hover { color: #e2743e; }
 
 .profile-button ion-icon {
   color: #e2743e;

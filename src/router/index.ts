@@ -9,6 +9,8 @@ import HostDashboardPage from '../views/HostDashboardPage.vue'
 import HostSpacesPage from '../views/HostSpacesPage.vue'
 import HostRequestsPage from '../views/HostRequestsPage.vue'
 import AddSpacePage from '../views/AddSpacePage.vue'
+import PaymentPage from '../views/PaymentPage.vue'
+import ReceiptPage from '../views/ReceiptPage.vue'
 import { getSupabaseClient } from '../lib/supabase'
 
 const routes: Array<RouteRecordRaw> = [
@@ -45,6 +47,18 @@ const routes: Array<RouteRecordRaw> = [
     path: '/checkout',
     name: 'Checkout',
     component: CheckoutPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/payment',
+    name: 'Payment',
+    component: PaymentPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/receipt',
+    name: 'Receipt',
+    component: ReceiptPage,
     meta: { requiresAuth: true }
   },
   {
