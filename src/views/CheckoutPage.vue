@@ -10,21 +10,36 @@
       </header>
 
       <main class="checkout-shell">
-        <div class="checkout-heading">
+        <div v-if="!submitted" class="checkout-heading">
           <span class="eyebrow">SECURE YOUR SPACE</span>
           <h1>Make it your<br /><em>next casa.</em></h1>
           <p>Review your space and share a few details to start your booking request.</p>
         </div>
 
-        <div v-if="submitted" class="success-card" role="status">
-          <span class="success-icon"><ion-icon :icon="checkmarkOutline" /></span>
-          <div>
-            <span class="eyebrow">REQUEST RECEIVED</span>
-            <h2>Your booking request is on its way.</h2>
-            <p>Casa will connect you with the host to confirm the next steps for {{ booking.space }}.</p>
+        <section v-if="submitted" class="booking-success" role="status" aria-labelledby="booking-success-title">
+          <div class="confetti-layer" aria-hidden="true">
+            <span v-for="piece in 32" :key="piece" class="confetti-piece" />
           </div>
-          <a href="/listings">Explore more spaces <ion-icon :icon="arrowForwardOutline" /></a>
-        </div>
+          <div class="success-heading">
+            <span class="success-icon"><ion-icon :icon="checkmarkOutline" /></span>
+            <span class="eyebrow">PAYMENT RECEIVED</span>
+            <h1 id="booking-success-title">Your next casa<br /><em>is in motion.</em></h1>
+            <p>Your booking request is complete. The host can now follow up about your move-in.</p>
+          </div>
+          <div class="success-card">
+            <div class="success-card-heading">
+              <span class="eyebrow">BOOKING CONFIRMED</span>
+              <h2>{{ booking.listing }}</h2>
+              <p><ion-icon :icon="locationOutline" /> {{ booking.location }}</p>
+            </div>
+            <div class="success-details">
+              <div><span>Space</span><strong>{{ booking.space }}</strong></div>
+              <div><span>Move-in date</span><strong>{{ confirmationMoveInDate }}</strong></div>
+              <div><span>Monthly rent</span><strong>₱{{ booking.price.toLocaleString() }}</strong></div>
+            </div>
+            <a href="/listings">Explore more spaces <ion-icon :icon="arrowForwardOutline" /></a>
+          </div>
+        </section>
 
         <div v-else class="checkout-grid">
           <section class="booking-summary" aria-labelledby="booking-summary-title">
@@ -39,21 +54,77 @@
             <div class="price-row"><span>Monthly rent</span><strong>₱{{ booking.price.toLocaleString() }}<small> / month</small></strong></div>
           </section>
 
-          <form class="checkout-form" @submit.prevent="submitBooking">
+          <form ref="wizardForm" class="checkout-form" @submit.prevent="handleWizardSubmit">
             <div class="form-heading">
               <span class="eyebrow">BOOKING DETAILS</span>
-              <h2>Tell us about yourself</h2>
-              <p>Your host will use these details to review your request.</p>
+              <h2>Let’s get you settled.</h2>
+              <p>A few quick steps, then your request is ready for the host.</p>
             </div>
-            <label>Full name<input v-model.trim="form.name" required type="text" placeholder="Juan Dela Cruz" autocomplete="name" /></label>
-            <label>Email address<input v-model.trim="form.email" required type="email" placeholder="juan@example.com" autocomplete="email" /></label>
-            <label>Move-in date<input v-model="form.moveIn" required type="date" /></label>
-            <label>Message to host <span class="optional">(optional)</span><textarea v-model.trim="form.message" rows="3" placeholder="Tell the host a little about yourself..." /></label>
-            <label class="terms"><input v-model="form.agreed" required type="checkbox" /><span>I agree to Casa's booking guidelines and understand this is a request, not a confirmed reservation.</span></label>
-            <button class="submit-button" type="submit" :disabled="isSubmitting">
-              {{ isSubmitting ? 'Opening payment...' : 'Continue to payment' }}
-              <ion-icon v-if="!isSubmitting" :icon="arrowForwardOutline" />
-            </button>
+            <div class="wizard-progress" :aria-label="`Step ${currentStep} of ${steps.length}`">
+              <div v-for="(step, index) in steps" :key="step.title" class="progress-step"
+                :class="{ active: currentStep === index + 1, complete: currentStep > index + 1 }">
+                <span class="progress-dot"><ion-icon v-if="currentStep > index + 1" :icon="checkmarkOutline" />
+                  <span v-else>{{ `0${index + 1}` }}</span></span>
+                <span class="progress-label">{{ step.title }}</span>
+              </div>
+            </div>
+
+            <Transition :name="transitionName" mode="out-in">
+              <section :key="currentStep" class="wizard-panel" :aria-label="steps[currentStep - 1].title">
+                <template v-if="currentStep === 1">
+                  <div class="step-intro"><span class="step-kicker">STEP 01 · YOUR DETAILS</span>
+                    <h3>Who’s making the request?</h3>
+                    <p>Share the best way for your host to get in touch.</p>
+                  </div>
+                  <label>Full name<input v-model.trim="form.name" data-wizard-field required type="text"
+                    placeholder="Juan Dela Cruz" autocomplete="name" /></label>
+                  <label>Email address<input v-model.trim="form.email" data-wizard-field required type="email"
+                    placeholder="juan@example.com" autocomplete="email" /></label>
+                </template>
+
+                <template v-else-if="currentStep === 2">
+                  <div class="step-intro"><span class="step-kicker">STEP 02 · MOVE-IN PLANS</span>
+                    <h3>When would you like to move?</h3>
+                    <p>Choose today or a future date. You can leave a note for the host, too.</p>
+                  </div>
+                  <label>Move-in date<input v-model="form.moveIn" data-wizard-field :min="minimumMoveInDate"
+                    required type="date" /></label>
+                  <label>Message to host <span class="optional">(optional)</span>
+                    <textarea v-model.trim="form.message" rows="3"
+                      placeholder="Tell the host a little about yourself..." /></label>
+                </template>
+
+                <template v-else>
+                  <div class="step-intro"><span class="step-kicker">STEP 03 · FINAL REVIEW</span>
+                    <h3>Ready to meet your next casa?</h3>
+                    <p>Check your details before continuing to payment.</p>
+                  </div>
+                  <div class="review-card">
+                    <div><span>Your name</span><strong>{{ form.name }}</strong></div>
+                    <div><span>Email address</span><strong>{{ form.email }}</strong></div>
+                    <div><span>Move-in date</span><strong>{{ formattedMoveInDate }}</strong></div>
+                    <div v-if="form.message"><span>Note to host</span><strong>{{ form.message }}</strong></div>
+                    <div class="review-space"><span>Space</span><strong>{{ booking.space }} · {{ booking.listing }}</strong></div>
+                  </div>
+                  <label class="terms"><input v-model="form.agreed" data-wizard-field required type="checkbox" />
+                    <span>I agree to Casa's booking guidelines and understand this is a request, not a confirmed reservation.</span></label>
+                </template>
+              </section>
+            </Transition>
+
+            <div class="wizard-actions">
+              <button v-if="currentStep > 1" class="back-step-button" type="button" @click="previousStep">
+                <ion-icon :icon="arrowBackOutline" /> Back
+              </button>
+              <span v-else class="step-caption">STEP {{ currentStep }} OF {{ steps.length }}</span>
+              <button v-if="currentStep < steps.length" class="submit-button" type="button" @click="nextStep">
+                Continue <ion-icon :icon="arrowForwardOutline" />
+              </button>
+              <button v-else class="submit-button" type="submit" :disabled="isSubmitting">
+                {{ isSubmitting ? 'Opening payment...' : 'Continue to payment' }}
+                <ion-icon v-if="!isSubmitting" :icon="arrowForwardOutline" />
+              </button>
+            </div>
             <p class="secure-note"><ion-icon :icon="shieldCheckmarkOutline" /> Your information is only shared with this host.</p>
             <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
           </form>
@@ -67,7 +138,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
-import { arrowForwardOutline, checkmarkOutline, locationOutline, shieldCheckmarkOutline } from 'ionicons/icons';
+import { arrowBackOutline, arrowForwardOutline, checkmarkOutline, locationOutline, shieldCheckmarkOutline } from 'ionicons/icons';
 import { getSupabaseClient } from '../lib/supabase';
 
 const route = useRoute();
@@ -83,9 +154,39 @@ const booking = computed(() => ({
   image: String(route.query.image || defaultImage),
 }));
 const form = reactive({ name: '', email: '', moveIn: '', message: '', agreed: false });
-const submitted = ref(false);
+const steps = [
+  { title: 'Your details' },
+  { title: 'Move-in plans' },
+  { title: 'Review' },
+];
+const currentStep = ref(1);
+const transitionName = ref('wizard-forward');
+const wizardForm = ref<HTMLFormElement | null>(null);
+const minimumMoveInDate = (() => {
+  const today = new Date();
+  const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60_000);
+  return localToday.toISOString().slice(0, 10);
+})();
+const submitted = computed(() => route.query.bookingSuccess === 'true');
 const isSubmitting = ref(false);
 const errorMessage = ref('');
+const formattedMoveInDate = computed(() => {
+  if (!form.moveIn) return '';
+  return new Date(`${form.moveIn}T00:00:00`).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+});
+const confirmationMoveInDate = computed(() => {
+  const date = String(route.query.moveIn || '');
+  if (!date) return 'To be confirmed';
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+});
 
 onMounted(async () => {
   const { data: { user } } = await getSupabaseClient().auth.getUser();
@@ -98,8 +199,43 @@ function useDefaultImage(event: Event) {
   const image = event.target as HTMLImageElement;
   image.src = defaultImage;
 }
+function validateCurrentStep() {
+  const panel = wizardForm.value?.querySelector<HTMLElement>('.wizard-panel');
+  const fields = panel?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-wizard-field]');
+  if (!fields) return false;
+  for (const field of Array.from(fields)) {
+    if (!field.checkValidity()) {
+      field.reportValidity();
+      return false;
+    }
+  }
+  return true;
+}
+function nextStep() {
+  errorMessage.value = '';
+  if (!validateCurrentStep()) return;
+  transitionName.value = 'wizard-forward';
+  currentStep.value += 1;
+}
+function previousStep() {
+  errorMessage.value = '';
+  transitionName.value = 'wizard-back';
+  currentStep.value -= 1;
+}
+function handleWizardSubmit() {
+  if (currentStep.value < steps.length) {
+    nextStep();
+    return;
+  }
+  void submitBooking();
+}
 async function submitBooking() {
   errorMessage.value = '';
+  if (!validateCurrentStep()) return;
+  if (!form.moveIn || form.moveIn < minimumMoveInDate) {
+    errorMessage.value = 'Please choose today or a future move-in date.';
+    return;
+  }
   isSubmitting.value = true;
 
   try {
@@ -111,7 +247,16 @@ async function submitBooking() {
       throw new Error('This listing is missing its ID. Please return to the listings page and try again.');
     }
 
-    await router.push({ name: 'Payment', query: route.query });
+    await router.push({
+      name: 'Payment',
+      query: {
+        ...route.query,
+        name: form.name,
+        email: form.email,
+        moveIn: form.moveIn,
+        message: form.message,
+      },
+    });
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to send your booking request.';
   } finally {
@@ -128,4 +273,447 @@ async function submitBooking() {
 @media (prefers-reduced-motion: reduce) { .success-card, .success-icon, .success-card .eyebrow, .success-card h2, .success-card p, .success-card a { animation: none; } }
 @media (max-width: 700px) { .checkout-shell { padding: 42px 18px 55px; }.checkout-grid { grid-template-columns: 1fr; margin-top: 30px; }.checkout-form { padding: 21px 18px; }.success-card { align-items: start; flex-wrap: wrap; margin-top: 30px; padding: 22px; }.success-card a { margin-left: 63px; }.space-image { height: 190px; } }
 @media (max-width: 430px) { .checkout-header { height: 70px; padding: 0 18px; }.brand { font-size: 23px; }.brand-mark { height: 30px; width: 30px; }.back-link { font-size: 10px; }.checkout-heading h1 { font-size: 44px; }.success-card a { margin-left: 0; } }
+
+.booking-summary {
+  animation: summary-arrive .7s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.checkout-form {
+  animation: form-arrive .7s .08s cubic-bezier(.2, .8, .2, 1) both;
+  overflow: hidden;
+}
+
+.wizard-progress {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 3px 0 5px;
+}
+
+.progress-step {
+  align-items: center;
+  color: #a0aaa3;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  position: relative;
+  text-align: center;
+}
+
+.progress-step:not(:last-child)::after {
+  background: #e7ece6;
+  content: '';
+  height: 2px;
+  left: calc(50% + 17px);
+  position: absolute;
+  right: calc(-50% + 17px);
+  top: 16px;
+}
+
+.progress-step.complete:not(:last-child)::after {
+  animation: progress-fill .45s ease both;
+  background: #4b9b61;
+  transform-origin: left;
+}
+
+.progress-dot {
+  align-items: center;
+  background: #f3f5f1;
+  border: 1px solid #e3e9e1;
+  border-radius: 50%;
+  color: #89968d;
+  display: flex;
+  font-size: 9px;
+  height: 33px;
+  justify-content: center;
+  transition: background .3s ease, border-color .3s ease, color .3s ease, transform .3s ease;
+  width: 33px;
+  z-index: 1;
+}
+
+.progress-step.active .progress-dot {
+  animation: dot-pop .45s cubic-bezier(.2, 1.5, .5, 1) both;
+  background: #e2743e;
+  border-color: #e2743e;
+  box-shadow: 0 0 0 5px rgba(226, 116, 62, .12);
+  color: #fff;
+}
+
+.progress-step.complete .progress-dot {
+  background: #4b9b61;
+  border-color: #4b9b61;
+  color: #fff;
+}
+
+.progress-label {
+  font-size: 9px;
+  font-weight: 600;
+  transition: color .25s ease;
+}
+
+.progress-step.active,
+.progress-step.complete {
+  color: #174b35;
+}
+
+.wizard-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-height: 225px;
+  padding: 13px 0 4px;
+}
+
+.step-intro {
+  margin-bottom: 2px;
+}
+
+.step-kicker {
+  color: #e2743e;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+}
+
+.step-intro h3 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  margin: 7px 0 4px;
+}
+
+.step-intro p {
+  color: #89968d;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.wizard-actions {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.step-caption {
+  color: #9aa59e;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.back-step-button {
+  align-items: center;
+  background: transparent;
+  color: #587264;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  padding: 12px 4px;
+  transition: color .2s ease, transform .2s ease;
+}
+
+.back-step-button:hover {
+  color: #174b35;
+  transform: translateX(-3px);
+}
+
+.submit-button {
+  box-shadow: 0 5px 12px rgba(226, 116, 62, .2);
+  cursor: pointer;
+  transition: box-shadow .25s ease, transform .25s cubic-bezier(.2, .8, .2, 1), background .2s ease;
+}
+
+.submit-button:hover:not(:disabled) {
+  background: #d66733;
+  box-shadow: 0 8px 18px rgba(226, 116, 62, .28);
+  transform: translateY(-2px);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(0) scale(.98);
+}
+
+.review-card {
+  animation: review-arrive .45s .08s both;
+  background: #f8faf6;
+  border: 1px solid #e8eee7;
+  border-radius: 9px;
+  display: grid;
+  gap: 13px 16px;
+  grid-template-columns: 1fr 1fr;
+  padding: 15px;
+}
+
+.review-card div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-card span {
+  color: #89968d;
+  font-size: 9px;
+}
+
+.review-card strong {
+  color: #174b35;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.review-card .review-space {
+  border-top: 1px solid #e5ebe4;
+  grid-column: 1 / -1;
+  padding-top: 11px;
+}
+
+.wizard-panel .terms {
+  padding: 2px 0;
+}
+
+.wizard-forward-enter-active,
+.wizard-forward-leave-active,
+.wizard-back-enter-active,
+.wizard-back-leave-active {
+  transition: opacity .22s ease, transform .28s cubic-bezier(.2, .8, .2, 1);
+}
+
+.wizard-forward-enter-from {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+.wizard-forward-leave-to {
+  opacity: 0;
+  transform: translateX(-18px);
+}
+
+.wizard-back-enter-from {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+.wizard-back-leave-to {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+@keyframes summary-arrive {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes form-arrive {
+  from { opacity: 0; transform: translateY(22px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes dot-pop {
+  from { transform: scale(.75); }
+  to { transform: scale(1); }
+}
+
+@keyframes progress-fill {
+  from { transform: scaleX(.15); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes review-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 430px) {
+  .progress-label { font-size: 8px; }
+  .wizard-panel { min-height: 250px; }
+  .review-card { gap: 12px; padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-summary,
+  .checkout-form,
+  .progress-step.complete:not(:last-child)::after,
+  .progress-step.active .progress-dot,
+  .review-card {
+    animation: none;
+  }
+  .wizard-forward-enter-active,
+  .wizard-forward-leave-active,
+  .wizard-back-enter-active,
+  .wizard-back-leave-active,
+  .progress-dot,
+  .progress-label,
+  .back-step-button,
+  .submit-button {
+    transition: none;
+  }
+}
+
+.booking-success {
+  margin: 28px auto 0;
+  max-width: 650px;
+  position: relative;
+}
+
+.confetti-layer {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  z-index: 5;
+}
+
+.confetti-piece {
+  animation: confetti-fall 3.8s linear both;
+  background: #e2743e;
+  border-radius: 2px;
+  height: 10px;
+  left: 3%;
+  opacity: 0;
+  position: absolute;
+  top: -14px;
+  width: 7px;
+}
+
+.confetti-piece:nth-child(6n + 1) { background: #4b9b61; left: 6%; animation-delay: .05s; }
+.confetti-piece:nth-child(6n + 2) { background: #f3c969; left: 13%; animation-delay: .35s; animation-duration: 4.2s; }
+.confetti-piece:nth-child(6n + 3) { background: #e2743e; left: 21%; animation-delay: .15s; animation-duration: 3.5s; }
+.confetti-piece:nth-child(6n + 4) { background: #174b35; left: 29%; animation-delay: .55s; }
+.confetti-piece:nth-child(6n + 5) { background: #8bc6a0; left: 37%; animation-delay: .25s; animation-duration: 4.4s; }
+.confetti-piece:nth-child(6n) { background: #f0a184; left: 44%; animation-delay: .45s; animation-duration: 3.6s; }
+.confetti-piece:nth-child(12n + 1) { left: 53%; }
+.confetti-piece:nth-child(12n + 2) { left: 60%; }
+.confetti-piece:nth-child(12n + 3) { left: 67%; }
+.confetti-piece:nth-child(12n + 4) { left: 74%; }
+.confetti-piece:nth-child(12n + 5) { left: 81%; }
+.confetti-piece:nth-child(12n) { left: 90%; }
+.confetti-piece:nth-child(3n) { border-radius: 50%; height: 8px; width: 8px; }
+
+@keyframes confetti-fall {
+  0% { opacity: 0; transform: translate3d(0, -4vh, 0) rotate(0); }
+  10% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(24px, 110vh, 0) rotate(760deg); }
+}
+
+.success-heading {
+  animation: success-content-in .55s .08s both;
+  margin: 0 auto 28px;
+  max-width: 510px;
+  text-align: center;
+}
+
+.success-heading .success-icon {
+  animation: success-icon-pop .65s cubic-bezier(.22, 1, .36, 1) both;
+  height: 58px;
+  margin: 0 auto 20px;
+  width: 58px;
+}
+
+.success-heading h1 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(42px, 6vw, 58px);
+  letter-spacing: -2px;
+  line-height: 1;
+  margin: 12px 0;
+}
+
+.success-heading h1 em {
+  color: #e2743e;
+  font-weight: 600;
+}
+
+.success-heading p {
+  color: #819087;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.booking-success .success-card {
+  animation: success-card-in .65s .18s cubic-bezier(.22, 1, .36, 1) both;
+  display: block;
+  margin: 0;
+  padding: 26px;
+}
+
+.success-card-heading {
+  border-bottom: 1px solid #e8eee7;
+  padding-bottom: 17px;
+}
+
+.success-card-heading h2 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 25px;
+  margin: 9px 0 5px;
+}
+
+.success-card-heading p {
+  align-items: center;
+  color: #829088;
+  display: flex;
+  font-size: 11px;
+  gap: 5px;
+  margin: 0;
+}
+
+.success-card-heading p ion-icon {
+  color: #e2743e;
+}
+
+.success-details {
+  display: grid;
+  gap: 15px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 19px 0;
+}
+
+.success-details div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.success-details span {
+  color: #89968d;
+  font-size: 10px;
+}
+
+.success-details strong {
+  color: #174b35;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.booking-success .success-card > a {
+  border-top: 1px solid #e8eee7;
+  justify-content: center;
+  margin: 0;
+  padding-top: 17px;
+}
+
+@media (max-width: 480px) {
+  .booking-success { margin-top: 12px; }
+  .booking-success .success-card { padding: 20px; }
+  .success-details { gap: 12px; grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    animation: none;
+    display: none;
+  }
+  .success-heading,
+  .success-heading .success-icon,
+  .booking-success .success-card {
+    animation: none;
+  }
+}
 </style>

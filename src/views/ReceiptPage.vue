@@ -13,7 +13,7 @@
           <div class="receipt-meta"><span>Ref No. {{ referenceNumber }}</span><span>{{ currentDate }}</span></div>
           <div class="receipt-note">Your mock payment has been received by Casa.</div>
         </section>
-        <p class="redirect-message">Returning to the vendor in <strong>{{ secondsRemaining }}</strong>s...</p>
+        <p class="redirect-message">Returning to your booking in <strong>{{ secondsRemaining }}</strong>s...</p>
       </main>
     </ion-content>
   </ion-page>
@@ -37,7 +37,10 @@ onMounted(() => {
     secondsRemaining.value -= 1;
     if (secondsRemaining.value <= 0) {
       if (redirectTimer) clearInterval(redirectTimer);
-      void router.replace('/listings');
+      void router.replace({
+        name: 'Checkout',
+        query: { ...route.query, bookingSuccess: 'true' },
+      });
     }
   }, 1000);
 });

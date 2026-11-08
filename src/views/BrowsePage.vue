@@ -10,9 +10,6 @@
           <ion-icon :icon="searchOutline" />
           <input v-model="searchTerm" type="search" placeholder="Search city, school, or area"
             aria-label="Search listings" />
-          <span class="search-divider" />
-          <ion-icon :icon="calendarOutline" />
-          <span class="search-date">Any move-in date</span>
           <button type="button" aria-label="Search"><ion-icon :icon="arrowForwardOutline" /></button>
         </div>
         <nav class="header-actions" aria-label="Account navigation">
@@ -38,18 +35,25 @@
             </div>
             <label class="sort-control">Sort by
               <select v-model="sortBy" aria-label="Sort listings">
-                <option value="recommended" style="border: red">Recommended</option>
-                <option value="price-low">Price: low to high</option>
-                <option value="price-high">Price: high to low</option>
-                <option value="rating">Top rated</option>
+                <option value="recommended">Recommended</option>
+                <option value="price-low">Lowest price</option>
+                <option value="price-high">Highest price</option>
               </select>
             </label>
           </div>
 
-          <div class="filter-row">
-            <button v-for="filter in filters" :key="filter.label" class="filter-chip"
-              :class="{ selected: activeFilter === filter.value }" type="button" @click="activeFilter = filter.value">
-              <ion-icon :icon="filter.icon" /> {{ filter.label }}
+          <div class="filter-strip">
+            <button class="filter-arrow" type="button" aria-label="Scroll filters left" @click="scrollFilters(-1)">
+              <ion-icon :icon="chevronBackOutline" />
+            </button>
+            <div ref="filterScroller" class="filter-row">
+              <button v-for="filter in filters" :key="filter.value" class="filter-chip"
+                :class="{ selected: activeFilter === filter.value }" type="button" @click="activeFilter = filter.value">
+                <ion-icon :icon="filter.icon" /> {{ filter.label }}
+              </button>
+            </div>
+            <button class="filter-arrow" type="button" aria-label="Scroll filters right" @click="scrollFilters(1)">
+              <ion-icon :icon="chevronForwardOutline" />
             </button>
           </div>
 
@@ -57,7 +61,7 @@
             <article v-for="listing in filteredListings" :key="listing.id" class="listing-card"
               :class="{ active: selectedListing?.id === listing.id }" @click="selectedListing = listing">
               <div class="listing-image" :style="{ backgroundImage: `url(${listing.image})` }">
-                <span v-if="listing.badge" class="listing-badge">{{ listing.badge }}</span>
+                <span class="listing-badge" :class="getListingTag(listing).variant">{{ getListingTag(listing).label }}</span>
                 <button class="favorite-button" :class="{ liked: favorites.has(listing.id) }" type="button"
                   :aria-label="`Save ${listing.name}`" @click.stop="toggleFavorite(listing.id)">
                   <ion-icon :icon="favorites.has(listing.id) ? heart : heartOutline" />
@@ -83,35 +87,18 @@
         </section>
 
         <aside class="map-panel" aria-label="Map of Casa listings">
-          <div class="map-placeholder">
-            <div class="map-api-placeholder" aria-label="Google 3D Maps placeholder">
-              <ion-icon :icon="mapOutline" />
-              <span>Google 3D Map placeholder</span>
+          <div class="map-container">
+            <div ref="mapElement" class="leaflet-map" role="application"
+              aria-label="Map of listings. Click or drag a pin to filter listings within five kilometers." />
+            <div class="map-radius-control">
+              <span>{{ nearbyPin ? 'Showing listings within 5 km' : 'Click the map to find nearby listings' }}</span>
+              <button v-if="nearbyPin" type="button" @click="clearNearbyPin">Clear area</button>
             </div>
-            <div class="map-grid" />
-            <div class="map-road road-one" />
-            <div class="map-road road-two" />
-            <div class="map-road road-three" />
-            <div v-for="(pin, index) in mapPins" :key="pin" class="map-pin"
-              :class="{ active: selectedListing?.id === pin }" :style="pinPositions[index]"
-              @click="selectedListing = listings.find((listing) => listing.id === pin) ?? null">
-              <span>₱{{(listings.find((listing) => listing.id === pin)?.price ?? 0) / 1000}}k</span>
-            </div>
-            <div class="map-label label-katipunan">KATIPUNAN</div>
-            <div class="map-label label-tektite">PROJECT 4</div>
-            <div class="map-label label-campus">ATENEO CAMPUS</div>
-            <div class="map-coming-soon"><span class="map-icon"><ion-icon
-                  :icon="mapOutline" /></span><strong>Interactive map coming soon</strong><small>Google 3D Maps will
-                appear here</small></div>
-            <div class="map-controls"><button type="button" aria-label="Zoom in">+</button><button type="button"
-                aria-label="Zoom out">−</button><button type="button" aria-label="Current location"><ion-icon
-                  :icon="locateOutline" /></button></div>
           </div>
           <div class="map-footer"><span><ion-icon :icon="shieldCheckmarkOutline" /> Verified Casa listings</span><button
-              type="button" @click="showMapNotice = true">About this map <ion-icon
+              type="button" @click="showMapNotice = !showMapNotice">Map attribution <ion-icon
                 :icon="informationCircleOutline" /></button></div>
-          <div v-if="showMapNotice" class="map-notice" role="status">This area is reserved for the Google 3D Maps
-            integration.</div>
+          <div v-if="showMapNotice" class="map-notice" role="status">Map data © OpenStreetMap contributors. Click the map or drag the orange pin to filter within 5 km.</div>
         </aside>
       </main>
       <div v-if="selectedListing" class="listing-backdrop" @click.self="selectedListing = null">
@@ -121,7 +108,7 @@
             <span class="scroll-chevron" />
           </div>
           <div class="selected-listing-image" :style="{ backgroundImage: `url(${selectedListing.image})` }">
-            <span class="selected-label">SELECTED SPACE</span>
+            <span class="selected-label" :class="selectedListingTag.variant">{{ selectedListingTag.label }}</span>
           </div>
           <div class="selected-listing-body">
             <div class="selected-listing-heading">
@@ -146,23 +133,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import L, { type Circle, type Map as LeafletMap, type Marker } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import BookingPanel from '../components/BookingPanel.vue';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
 import { getBookingFloors, listings, type BookingSelection, type Listing } from '../data/listings';
 import {
   arrowForwardOutline,
-  calendarOutline,
+  chevronBackOutline,
+  chevronForwardOutline,
   heart,
   heartOutline,
   homeOutline,
   informationCircleOutline,
-  locateOutline,
   locationOutline,
-  mapOutline,
   optionsOutline,
   personOutline,
   searchOutline,
@@ -175,22 +166,18 @@ import {
 const filters = [
   { label: 'All spaces', value: 'all', icon: sparklesOutline },
   { label: 'Private room', value: 'Private room', icon: homeOutline },
-  { label: 'Bedspace', value: 'Bedspace', icon: personOutline },
-  { label: 'Under ₱8k', value: 'under-8k', icon: walletOutline },
-  { label: '₱8k–₱10k', value: '8k-10k', icon: walletOutline },
+  { label: 'Bedspaces', value: 'Bedspace', icon: personOutline },
+  { label: 'Highly rated', value: 'highly-rated', icon: star },
+  { label: 'Budget friendly', value: 'budget-friendly', icon: walletOutline },
+  { label: 'Newly added', value: 'newly-added', icon: sparklesOutline },
 ];
-const mapPins = [1, 2, 3, 4, 5, 6];
-const pinPositions = [
-  { left: '29%', top: '40%' },
-  { left: '56%', top: '56%' },
-  { left: '73%', top: '29%' },
-  { left: '42%', top: '72%' },
-  { left: '20%', top: '23%' },
-  { left: '78%', top: '70%' },
-];
+const NEARBY_RADIUS_METERS = 5000;
 const searchTerm = ref('');
 const activeFilter = ref('all');
 const sortBy = ref('recommended');
+const mapElement = ref<HTMLDivElement | null>(null);
+const nearbyPin = ref<L.LatLng | null>(null);
+const filterScroller = ref<HTMLElement | null>(null);
 const selectedListing = ref<Listing | null>(null);
 const selectedListingElement = ref<HTMLElement | null>(null);
 const hasScrollableContent = ref(false);
@@ -199,12 +186,142 @@ let selectedListingResizeObserver: ResizeObserver | null = null;
 const favorites = ref(new Set<number>());
 const showFilters = ref(false);
 const showMapNotice = ref(false);
+let leafletMap: LeafletMap | null = null;
+let listingMarkerLayer: L.MarkerClusterGroup | null = null;
+let nearbyPinMarker: Marker | null = null;
+let nearbyRadiusCircle: Circle | null = null;
+let mapResizeObserver: ResizeObserver | null = null;
 const router = useRouter();
 const { user } = useAuthUser();
 const { logout } = useLogout();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
+function getListingTag(listing: Listing) {
+  if (isNewlyAdded(listing)) return { label: 'New', variant: 'new-tag' };
+  const rating = Number(listing.rating);
+  if (Number.isFinite(rating) && rating >= 4.8) {
+    return { label: 'Highly rated', variant: 'high-rating-tag' };
+  }
+  if (listing.price <= 8000) {
+    return { label: 'Budget friendly', variant: 'budget-tag' };
+  }
+  return { label: `${listing.rating} rating`, variant: 'rating-tag' };
+}
+const selectedListingTag = computed(() => selectedListing.value
+  ? getListingTag(selectedListing.value)
+  : { label: '', variant: '' });
+function isNewlyAdded(listing: Listing) {
+  if (!listing.dateAdded) return false;
+  const addedAt = new Date(listing.dateAdded).getTime();
+  const ageInDays = (Date.now() - addedAt) / (1000 * 60 * 60 * 24);
+  return Number.isFinite(addedAt) && ageInDays >= 0 && ageInDays <= 30;
+}
+function scrollFilters(direction: -1 | 1) {
+  filterScroller.value?.scrollBy({ left: direction * 180, behavior: 'smooth' });
+}
+function initializeMap() {
+  if (!mapElement.value || leafletMap) return;
+  leafletMap = L.map(mapElement.value, { zoomControl: true }).setView([12.5, 121.5], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(leafletMap);
+  listingMarkerLayer = L.markerClusterGroup({
+    maxClusterRadius: 55,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true,
+    spiderfyDistanceMultiplier: 1.4,
+    iconCreateFunction: (cluster) => L.divIcon({
+      className: 'listing-cluster-marker',
+      html: `<span><strong>${cluster.getChildCount()}</strong><small>spaces</small></span>`,
+      iconSize: [58, 58],
+      iconAnchor: [29, 29],
+    }),
+  }).addTo(leafletMap);
+  const listingBounds = L.latLngBounds(listings.map((listing) =>
+    L.latLng(listing.coordinates.latitude, listing.coordinates.longitude),
+  ));
+  leafletMap.fitBounds(listingBounds, { padding: [30, 30], maxZoom: 7 });
+  leafletMap.on('click', (event: L.LeafletMouseEvent) => setNearbyPin(event.latlng));
+  refreshListingMarkers();
+  mapResizeObserver = new ResizeObserver(() => leafletMap?.invalidateSize({ pan: false }));
+  mapResizeObserver.observe(mapElement.value);
+  void nextTick(() => leafletMap?.invalidateSize({ pan: false }));
+}
+function refreshListingMarkers() {
+  if (!listingMarkerLayer) return;
+  const markerLayer = listingMarkerLayer;
+  markerLayer.clearLayers();
+  filteredListings.value.forEach((listing) => {
+    const priceLabel = `${(listing.price / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}k`;
+    const icon = L.divIcon({
+      className: 'listing-price-marker',
+      html: `<span>₱${priceLabel}</span>`,
+      iconSize: [54, 34],
+      iconAnchor: [27, 17],
+    });
+    L.marker([listing.coordinates.latitude, listing.coordinates.longitude], { icon })
+      .bindTooltip(`${listing.name} · ₱${listing.price.toLocaleString()} / month`)
+      .on('click', () => { selectedListing.value = listing; })
+      .addTo(markerLayer);
+  });
+}
+function setNearbyPin(position: L.LatLng) {
+  if (!leafletMap) return;
+  nearbyPin.value = position;
+  const pinIcon = L.divIcon({
+    className: 'nearby-pin-icon',
+    html: '<svg viewBox="0 0 32 40" aria-hidden="true"><path d="M16 1.5C8.1 1.5 2 7.6 2 15.5c0 10.1 14 22.8 14 22.8s14-12.7 14-22.8C30 7.6 23.9 1.5 16 1.5Z" fill="#e2743e" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="15.5" r="5.2" fill="#fff"/><circle cx="16" cy="15.5" r="2.3" fill="#174b35"/></svg>',
+    iconSize: [32, 40],
+    iconAnchor: [16, 39],
+  });
+  if (nearbyPinMarker) {
+    nearbyPinMarker.setLatLng(position);
+  } else {
+    nearbyPinMarker = L.marker(position, { icon: pinIcon, draggable: true, zIndexOffset: 1000 }).addTo(leafletMap);
+    nearbyPinMarker.bindTooltip('Search center');
+    nearbyPinMarker.on('dragend', () => {
+      if (!nearbyPinMarker) return;
+      const draggedPosition = nearbyPinMarker.getLatLng();
+      nearbyPin.value = draggedPosition;
+      nearbyRadiusCircle?.setLatLng(draggedPosition);
+    });
+  }
+  if (nearbyRadiusCircle) {
+    nearbyRadiusCircle.setLatLng(position);
+  } else {
+    nearbyRadiusCircle = L.circle(position, {
+      radius: NEARBY_RADIUS_METERS,
+      color: '#e2743e',
+      fillColor: '#e2743e',
+      fillOpacity: 0.1,
+      weight: 2,
+    }).addTo(leafletMap);
+  }
+  leafletMap.panTo(position);
+}
+function clearNearbyPin() {
+  nearbyPin.value = null;
+  if (nearbyPinMarker && leafletMap) leafletMap.removeLayer(nearbyPinMarker);
+  if (nearbyRadiusCircle && leafletMap) leafletMap.removeLayer(nearbyRadiusCircle);
+  nearbyPinMarker = null;
+  nearbyRadiusCircle = null;
+}
+function distanceInMeters(first: L.LatLng, second: L.LatLng) {
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const latitudeDelta = toRadians(second.lat - first.lat);
+  const longitudeDelta = toRadians(second.lng - first.lng);
+  const latitudeOne = toRadians(first.lat);
+  const latitudeTwo = toRadians(second.lat);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(latitudeOne) * Math.cos(latitudeTwo) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+onMounted(() => {
+  void nextTick(initializeMap);
+});
 function updateScrollIndicator() {
   const element = selectedListingElement.value;
   hasScrollableContent.value = Boolean(element && element.scrollHeight > element.clientHeight + 1);
@@ -228,7 +345,12 @@ watch(selectedListing, (listing) => {
     }
   });
 });
-onBeforeUnmount(() => selectedListingResizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  selectedListingResizeObserver?.disconnect();
+  mapResizeObserver?.disconnect();
+  leafletMap?.remove();
+  leafletMap = null;
+});
 function startBooking(selection: BookingSelection) {
   if (!selectedListing.value) return;
   void router.push({
@@ -249,14 +371,18 @@ const filteredListings = computed(() => {
   const term = searchTerm.value.toLowerCase();
   const matches = listings.filter((listing) => {
     const matchesTerm = !term || `${listing.name} ${listing.location} ${listing.type}`.toLowerCase().includes(term);
+    const listingPosition = L.latLng(listing.coordinates.latitude, listing.coordinates.longitude);
+    const matchesNearby = !nearbyPin.value || distanceInMeters(nearbyPin.value, listingPosition) <= NEARBY_RADIUS_METERS;
     const matchesFilter = activeFilter.value === 'all'
-      || (activeFilter.value === 'under-8k' ? listing.price < 8000
-        : activeFilter.value === '8k-10k' ? listing.price >= 8000 && listing.price <= 10000
-          : listing.type === activeFilter.value);
-    return matchesTerm && matchesFilter;
+      || (activeFilter.value === 'highly-rated' && Number(listing.rating) >= 4.8)
+      || (activeFilter.value === 'budget-friendly' && listing.price <= 8000)
+      || (activeFilter.value === 'newly-added' && isNewlyAdded(listing))
+      || listing.type === activeFilter.value;
+    return matchesTerm && matchesFilter && matchesNearby;
   });
-  return [...matches].sort((a, b) => sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : sortBy.value === 'rating' ? Number(b.rating) - Number(a.rating) : a.id - b.id);
+  return [...matches].sort((a, b) => sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : a.id - b.id);
 });
+watch(filteredListings, refreshListingMarkers);
 
 function toggleFavorite(id: number) {
   const next = new Set(favorites.value);
@@ -355,18 +481,6 @@ function clearFilters() {
   color: #a0aaa3;
 }
 
-.search-divider {
-  background: #e1e7e1;
-  height: 20px;
-  width: 1px;
-}
-
-.search-date {
-  color: #7d8c82;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
 .search-bar button {
   align-items: center;
   background: #e2743e;
@@ -422,6 +536,7 @@ function clearFilters() {
 .browse-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(380px, .8fr);
+  grid-template-rows: minmax(0, 1fr);
   height: calc(100vh - 76px);
   min-height: 650px;
 }
@@ -472,21 +587,67 @@ function clearFilters() {
 }
 
 .sort-control select {
-  background: transparent;
-  border: 0;
+  background: #fff;
+  border: 1px solid #e5eae4;
+  border-radius: 9px;
   color: #174b35;
   font: inherit;
   font-weight: 700;
-  margin-left: 3px;
+  margin-left: 7px;
   outline: 0;
+  padding: 9px 30px 9px 12px;
+}
+
+.sort-control select:focus-visible {
+  border-color: #e2743e;
+  box-shadow: 0 0 0 3px rgba(226, 116, 62, .12);
+}
+
+.filter-strip {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  margin: 28px 0 24px;
+  min-width: 0;
 }
 
 .filter-row {
   display: flex;
+  flex: 1;
   gap: 8px;
-  margin: 28px 0 24px;
+  min-width: 0;
   overflow-x: auto;
-  padding-bottom: 3px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  -ms-overflow-style: none;
+}
+
+.filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-arrow {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e5eae4;
+  border-radius: 50%;
+  color: #174b35;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 30px;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+
+.filter-arrow:hover,
+.filter-arrow:focus-visible {
+  background: #174b35;
+  border-color: #174b35;
+  color: #fff;
+  outline: 0;
 }
 
 .filter-chip {
@@ -627,9 +788,10 @@ function clearFilters() {
 }
 
 .selected-label {
-  background: #174b35;
+  background: #fbfaf7;
   border-radius: 4px;
-  color: #fff;
+  color: #174b35;
+  display: inline-flex;
   font-size: 9px;
   font-weight: 700;
   left: 13px;
@@ -746,6 +908,22 @@ function clearFilters() {
   padding: 6px 8px;
   position: absolute;
   top: 9px;
+}
+
+.listing-badge.new-tag,
+.selected-label.new-tag {
+  background: #fbfaf7;
+  color: #174b35;
+}
+
+.listing-badge.high-rating-tag,
+.selected-label.high-rating-tag,
+.listing-badge.budget-tag,
+.selected-label.budget-tag,
+.listing-badge.rating-tag,
+.selected-label.rating-tag {
+  background: #fbfaf7;
+  color: #174b35;
 }
 
 .favorite-button {
@@ -878,196 +1056,132 @@ function clearFilters() {
   flex-direction: column;
   grid-column: 1;
   grid-row: 1;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   position: relative;
 }
 
-.map-placeholder {
-  background: #deeadc;
+.map-container {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
-.map-api-placeholder {
+.leaflet-map {
+  height: 100%;
+  min-height: 300px;
+  width: 100%;
+  z-index: 0;
+}
+
+.map-radius-control {
   align-items: center;
-  background: rgba(23, 75, 53, .82);
-  border-radius: 6px;
-  color: white;
-  display: flex;
-  font-size: 10px;
-  gap: 7px;
-  left: 20px;
-  padding: 8px 11px;
-  position: absolute;
-  top: 20px;
-  z-index: 3;
-}
-
-.map-api-placeholder ion-icon {
-  color: #f6b264;
-  font-size: 15px;
-}
-
-.map-grid {
-  background-image: linear-gradient(rgba(116, 153, 119, .13) 1px, transparent 1px), linear-gradient(90deg, rgba(116, 153, 119, .13) 1px, transparent 1px);
-  background-size: 70px 70px;
-  inset: 0;
-  opacity: .7;
-  position: absolute;
-  transform: rotate(-8deg) scale(1.2);
-}
-
-.map-road {
-  background: rgba(255, 255, 255, .75);
-  height: 28px;
-  position: absolute;
-  transform: rotate(-32deg);
-  width: 120%;
-}
-
-.road-one {
-  left: -5%;
-  top: 31%;
-}
-
-.road-two {
-  left: -15%;
-  top: 63%;
-  transform: rotate(16deg);
-}
-
-.road-three {
-  left: 21%;
-  top: 8%;
-  transform: rotate(67deg);
-}
-
-.map-pin {
-  align-items: center;
-  background: #e2743e;
-  border: 3px solid white;
-  border-radius: 50% 50% 50% 0;
-  box-shadow: 0 3px 8px rgba(23, 75, 53, .25);
-  color: white;
-  cursor: pointer;
-  display: flex;
-  height: 37px;
-  justify-content: center;
-  position: absolute;
-  transform: rotate(-45deg);
-  transition: transform .2s, background .2s;
-  width: 37px;
-  z-index: 1;
-}
-
-.map-pin span {
-  font-size: 9px;
-  font-weight: 700;
-  transform: rotate(45deg);
-}
-
-.map-pin:hover,
-.map-pin.active {
-  background: #174b35;
-  transform: rotate(-45deg) scale(1.18);
-  z-index: 2;
-}
-
-.map-label {
-  color: #83a083;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.7px;
-  position: absolute;
-}
-
-.label-katipunan {
-  left: 25%;
-  top: 28%;
-}
-
-.label-tektite {
-  right: 15%;
-  top: 47%;
-}
-
-.label-campus {
-  left: 37%;
-  bottom: 19%;
-}
-
-.map-coming-soon {
-  align-items: center;
-  background: rgba(255, 255, 255, .88);
-  border: 1px solid rgba(255, 255, 255, .7);
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(23, 75, 53, .08);
-  display: flex;
-  flex-direction: column;
-  left: 50%;
-  padding: 18px 25px;
-  position: absolute;
-  text-align: center;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 220px;
-}
-
-.map-icon {
-  align-items: center;
-  background: #e6f1e3;
-  border-radius: 50%;
-  color: #3f8058;
-  display: flex;
-  font-size: 24px;
-  height: 46px;
-  justify-content: center;
-  margin-bottom: 9px;
-  width: 46px;
-}
-
-.map-coming-soon strong {
-  color: #174b35;
-  font-family: 'Playfair Display', serif;
-  font-size: 15px;
-}
-
-.map-coming-soon small {
-  color: #839087;
-  font-size: 9px;
-  margin-top: 5px;
-}
-
-.map-controls {
-  background: white;
+  background: rgba(255, 255, 255, .96);
+  border: 1px solid #e5ebe4;
   border-radius: 8px;
   box-shadow: 0 3px 10px rgba(23, 75, 53, .12);
+  color: #174b35;
+  display: flex;
+  font-size: 10px;
+  gap: 10px;
+  right: 12px;
+  padding: 9px 11px;
+  position: absolute;
+  top: 12px;
+  z-index: 500;
+}
+
+.map-radius-control button {
+  background: #e2743e;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 2px 5px rgba(23, 75, 53, .16);
+  color: #fff;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 8px 12px;
+  transition: background .2s ease, box-shadow .2s ease, transform .2s ease;
+  white-space: nowrap;
+}
+
+.map-radius-control button:hover {
+  background: #c95d2c;
+  box-shadow: 0 3px 8px rgba(23, 75, 53, .22);
+  transform: translateY(-1px);
+}
+
+.map-radius-control button:focus-visible {
+  outline: 2px solid #174b35;
+  outline-offset: 2px;
+}
+
+:global(.listing-price-marker) {
+  background: transparent;
+  border: 0;
+}
+
+:global(.listing-price-marker span) {
+  align-items: center;
+  background: #e2743e;
+  border: 2px solid #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 6px rgba(23, 75, 53, .3);
+  color: #fff;
+  display: flex;
+  font: 700 10px 'DM Sans', sans-serif;
+  height: 30px;
+  justify-content: center;
+  white-space: nowrap;
+  width: 52px;
+}
+
+:global(.listing-price-marker:hover span) {
+  background: #174b35;
+  transform: scale(1.08);
+}
+
+:global(.listing-cluster-marker) {
+  background: transparent;
+  border: 0;
+}
+
+:global(.listing-cluster-marker span) {
+  align-items: center;
+  background: rgba(23, 75, 53, .94);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 3px 10px rgba(23, 75, 53, .3);
+  color: #fff;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: absolute;
-  right: 22px;
-  top: 22px;
+  height: 58px;
+  justify-content: center;
+  line-height: 1;
+  width: 58px;
 }
 
-.map-controls button {
-  background: white;
-  border-bottom: 1px solid #e8eee7;
-  color: #174b35;
-  font-size: 20px;
-  height: 36px;
-  width: 36px;
+:global(.listing-cluster-marker strong) {
+  font: 700 16px 'DM Sans', sans-serif;
 }
 
-.map-controls button:last-child {
+:global(.listing-cluster-marker small) {
+  font: 600 8px 'DM Sans', sans-serif;
+  margin-top: 3px;
+}
+
+:global(.marker-cluster-spider-leg) {
+  stroke: #174b35;
+  stroke-width: 1.5;
+}
+
+:global(.nearby-pin-icon) {
+  background: transparent;
   border: 0;
-  font-size: 15px;
-}
-
-.map-controls button:hover {
-  background: #f2f7f0;
+  filter: drop-shadow(0 2px 3px rgba(23, 75, 53, .38));
 }
 
 .map-footer {
@@ -1100,14 +1214,14 @@ function clearFilters() {
 
 .map-notice {
   background: #174b35;
-  bottom: 48px;
+  bottom: 50px;
   color: white;
   font-size: 10px;
-  left: 50%;
+  left: 12px;
+  max-width: min(360px, calc(100% - 24px));
   padding: 10px 15px;
   position: absolute;
-  transform: translateX(-50%);
-  white-space: nowrap;
+  z-index: 500;
 }
 
 @media (max-width: 1000px) {
@@ -1137,6 +1251,10 @@ function clearFilters() {
 }
 
 @media (max-width: 720px) {
+  .filter-arrow {
+    display: none;
+  }
+
   .browse-header {
     flex-wrap: wrap;
     height: auto;
@@ -1222,12 +1340,6 @@ function clearFilters() {
 }
 
 @media (max-width: 400px) {
-
-  .search-date,
-  .search-divider,
-  .search-bar>ion-icon:nth-of-type(2) {
-    display: none;
-  }
 
   .listing-card {
     grid-template-columns: 105px 1fr;
