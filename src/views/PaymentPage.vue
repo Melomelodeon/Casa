@@ -11,7 +11,8 @@
           <div class="payment-row amount-row"><span>Amount</span><strong>PHP {{ amount }}</strong></div>
           <div class="total-row"><span>Total</span><strong>PHP {{ amount }}</strong></div>
           <p class="review-copy">Please review to ensure that the details are correct before you proceed.</p>
-          <button class="pay-button" type="button" @click="pay">PAY PHP {{ amount }}</button>
+          <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
+          <button class="pay-button" type="button" :disabled="isSubmitting" @click="pay">PAY PHP {{ amount }}</button>
         </section>
       </main>
     </ion-content>
@@ -19,16 +20,61 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonPage } from '@ionic/vue';
+import { bookingIntentStorageKey, paidReceiptStorageKey, parseBookingIntent } from '../lib/bookingIntent';
+import { getSupabaseClient } from '../lib/supabase';
 
 const route = useRoute();
 const router = useRouter();
+const isSubmitting = ref(false);
+const errorMessage = ref('');
 const amount = computed(() => (Number(route.query.price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 }));
 
-function pay() {
-  void router.replace({ name: 'Receipt', query: route.query });
+async function pay() {
+  if (isSubmitting.value) return;
+  errorMessage.value = '';
+  isSubmitting.value = true;
+  try {
+    const rawIntent = sessionStorage.getItem(bookingIntentStorageKey);
+    if (!rawIntent) throw new Error('Your booking details were not found. Return to the listing and start again.');
+    const intent = parseBookingIntent(rawIntent);
+    if (typeof route.query.intent !== 'string' || intent.receiptToken !== route.query.intent) {
+      throw new Error('This payment does not match your booking. Return to the listing and start again.');
+    }
+
+    const client = getSupabaseClient();
+    const { data: { user }, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    if (!user) throw new Error('Please sign in again before confirming this booking.');
+
+    const { data: bookingId, error: bookingError } = await client.rpc('confirm_booking_after_payment', {
+      p_receipt_token: intent.receiptToken,
+      p_space_id: intent.spaceId,
+      p_room_id: intent.roomId,
+      p_bedspace_id: intent.bedspaceId,
+      p_tenant_name: intent.tenantName,
+      p_tenant_email: intent.tenantEmail,
+      p_move_in_date: intent.moveIn,
+      p_message: intent.message,
+    });
+    if (bookingError) throw bookingError;
+    if (bookingId === null || bookingId === undefined) {
+      throw new Error('The booking could not be confirmed. Please try again.');
+    }
+
+    sessionStorage.setItem(paidReceiptStorageKey, intent.receiptToken);
+    window.dispatchEvent(new Event('casa:booking-completed'));
+    await router.replace({
+      name: 'Receipt',
+      query: { ...route.query, bookingId: String(bookingId) },
+    });
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to continue to the receipt.';
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 </script>
 
@@ -53,5 +99,7 @@ function pay() {
 .review-copy { color: #92959c; font-size: 16px; line-height: 1.5; margin: 76px auto 23px; max-width: 390px; text-align: center; }
 .pay-button { background: #0864e8; border: 0; border-radius: 30px; color: white; cursor: pointer; display: block; font-size: 18px; font-weight: 700; margin: 0 auto; padding: 17px; width: 100%; }
 .pay-button:hover { background: #0756c7; }
+.pay-button:disabled { cursor: wait; opacity: .7; }
+.error-message { background: #fce8e5; border-radius: 7px; color: #a33b2d; font-size: 13px; padding: 10px; text-align: center; }
 @media (max-width: 480px) { .payment-card { padding: 24px 20px 30px; }.payment-card h1 { font-size: 34px; }.payment-row, .total-row { padding-left: 8px; padding-right: 8px; }.review-copy { margin-top: 52px; } }
 </style>

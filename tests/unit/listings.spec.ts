@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { getBookingFloors, mapDatabaseSpaces } from '../../src/data/listings';
+import { getBookingFloors, isListingFullyBooked, mapDatabaseSpaces } from '../../src/data/listings';
 
 describe('database listings', () => {
   test('maps published spaces and their nested booking details', () => {
-    const [listing] = mapDatabaseSpaces([{
+    const records = [{
       id: 21,
       name: 'Sage House',
       location: 'Makati',
@@ -56,7 +56,8 @@ describe('database listings', () => {
           ],
         }],
       }],
-    }]);
+    }];
+    const [listing] = mapDatabaseSpaces(records, [{ room_id: 41, bedspace_id: 52 }]);
 
     expect(listing).toMatchObject({
       id: 21,
@@ -70,10 +71,12 @@ describe('database listings', () => {
     expect(getBookingFloors(listing)[0].rooms[0]).toMatchObject({
       id: '41',
       name: 'Garden Room',
+      status: 'available',
       grid: { rows: 2, columns: 3, door: { row: 1, column: 3 } },
       beds: [
         {
           id: '51',
+          roomId: '41',
           name: 'Bed A',
           row: 2,
           column: 1,
@@ -82,12 +85,62 @@ describe('database listings', () => {
         },
         {
           id: '52',
+          roomId: '41',
           name: 'Bed B',
+          status: 'occupied',
           row: 1,
           column: 2,
           price: 8500,
         },
       ],
     });
+    expect(getBookingFloors(listing)[0].rooms[0].beds.map(({ id, row, column }) => ({ id, row, column }))).toEqual([
+      { id: '51', row: 2, column: 1 },
+      { id: '52', row: 1, column: 2 },
+    ]);
+    expect(isListingFullyBooked(listing)).toBe(false);
+
+    const [fullyBookedListing] = mapDatabaseSpaces(records, [
+      { room_id: 41, bedspace_id: 51 },
+      { room_id: 41, bedspace_id: 52 },
+    ]);
+    expect(isListingFullyBooked(fullyBookedListing)).toBe(true);
+  });
+
+  test('marks a private room booked from active booking records', () => {
+    const [listing] = mapDatabaseSpaces([{
+      id: 21,
+      name: 'Private Casa',
+      location: 'Makati',
+      type: 'Private room',
+      description: 'Private room.',
+      monthly_rent: 9000,
+      cover_photo_url: null,
+      latitude: null,
+      longitude: null,
+      created_at: '2026-11-08T10:00:00Z',
+      floors: [{
+        id: 31,
+        name: 'Ground floor',
+        photo_url: null,
+        rooms: [{
+          id: 41,
+          name: 'Room 1',
+          photo_url: null,
+          monthly_rent: 9000,
+          amenities: [],
+          house_rules: [],
+          maintenance: [],
+          grid_rows: 1,
+          grid_columns: 1,
+          door_row: null,
+          door_column: null,
+          bedspaces: [],
+        }],
+      }],
+    }], [{ room_id: 41, bedspace_id: null }]);
+
+    expect(getBookingFloors(listing)[0].rooms[0].status).toBe('occupied');
+    expect(isListingFullyBooked(listing)).toBe(true);
   });
 });

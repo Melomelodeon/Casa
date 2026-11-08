@@ -10,6 +10,44 @@
       </header>
 
       <main class="checkout-shell">
+        <div v-if="!submitted" :key="windAnimationKey" class="wind-gust" aria-hidden="true">
+          <div class="wind-band wind-top">
+            <span
+              v-for="gust in 4"
+              :key="`top-gust-${gust}`"
+              class="wind-trail"
+              :style="{ '--trail-offset': `${(gust * 7) % 30}vh`, '--trail-delay': `${(gust - 1) * 0.09}s` }"
+            />
+            <span
+              v-for="leaf in 8"
+              :key="`top-leaf-${leaf}`"
+              class="wind-leaf"
+              :style="{
+                '--leaf-offset': `${(leaf * 5) % 32}vh`,
+                '--leaf-delay': `${(leaf % 4) * 0.08}s`,
+                '--leaf-size': `${11 + (leaf % 4) * 3}px`,
+              }"
+            />
+          </div>
+          <div class="wind-band wind-bottom">
+            <span
+              v-for="gust in 3"
+              :key="`bottom-gust-${gust}`"
+              class="wind-trail"
+              :style="{ '--trail-offset': `${(gust * 9) % 30}vh`, '--trail-delay': `${0.2 + gust * 0.16}s` }"
+            />
+            <span
+              v-for="leaf in 7"
+              :key="`bottom-leaf-${leaf}`"
+              class="wind-leaf"
+              :style="{
+                '--leaf-offset': `${(leaf * 4) % 32}vh`,
+                '--leaf-delay': `${0.15 + (leaf % 4) * 0.13}s`,
+                '--leaf-size': `${15 + (leaf % 4) * 3}px`,
+              }"
+            />
+          </div>
+        </div>
         <div v-if="!submitted" class="checkout-heading">
           <span class="eyebrow">SECURE YOUR SPACE</span>
           <h1>Make it your<br /><em>next casa.</em></h1>
@@ -137,12 +175,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import { arrowBackOutline, arrowForwardOutline, checkmarkOutline, locationOutline, shieldCheckmarkOutline } from 'ionicons/icons';
 import { getSupabaseClient } from '../lib/supabase';
+import { bookingIntentStorageKey, paidReceiptStorageKey, type BookingIntent } from '../lib/bookingIntent';
 
 const route = useRoute();
 const router = useRouter();
+const windAnimationKey = ref(0);
 const defaultImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
 const booking = computed(() => ({
   listingId: Number(route.query.listingId) || 0,
@@ -170,6 +210,9 @@ const minimumMoveInDate = (() => {
 const submitted = computed(() => route.query.bookingSuccess === 'true');
 const isSubmitting = ref(false);
 const errorMessage = ref('');
+onIonViewWillEnter(() => {
+  windAnimationKey.value += 1;
+});
 const formattedMoveInDate = computed(() => {
   if (!form.moveIn) return '';
   return new Date(`${form.moveIn}T00:00:00`).toLocaleDateString('en-PH', {
@@ -246,15 +289,34 @@ async function submitBooking() {
     if (!booking.value.listingId) {
       throw new Error('This listing is missing its ID. Please return to the listings page and try again.');
     }
+    const roomId = Number(route.query.roomId);
+    const selectionKind = String(route.query.selectionKind);
+    const bedspaceId = route.query.bedspaceId ? Number(route.query.bedspaceId) : null;
+    if (!Number.isSafeInteger(roomId) || roomId <= 0
+      || (selectionKind !== 'bed' && selectionKind !== 'room')
+      || (selectionKind === 'bed' && (!Number.isSafeInteger(bedspaceId) || (bedspaceId ?? 0) <= 0))
+      || (selectionKind === 'room' && bedspaceId !== null)) {
+      throw new Error('The selected room or bed is missing. Return to the listing and select an available space.');
+    }
+
+    const intent: BookingIntent = {
+      receiptToken: crypto.randomUUID(),
+      spaceId: booking.value.listingId,
+      roomId,
+      bedspaceId,
+      moveIn: form.moveIn,
+      message: form.message,
+      tenantName: form.name,
+      tenantEmail: form.email,
+    };
+    sessionStorage.setItem(bookingIntentStorageKey, JSON.stringify(intent));
+    sessionStorage.removeItem(paidReceiptStorageKey);
 
     await router.push({
       name: 'Payment',
       query: {
         ...route.query,
-        name: form.name,
-        email: form.email,
-        moveIn: form.moveIn,
-        message: form.message,
+        intent: intent.receiptToken,
       },
     });
   } catch (error) {
@@ -269,6 +331,26 @@ async function submitBooking() {
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
 :global(body) { background: #fbfaf7; color: #174b35; font-family: 'DM Sans', sans-serif; } :global(*) { box-sizing: border-box; }
 .checkout-content { --background: #fbfaf7; }.checkout-header { align-items: center; background: #fff; border-bottom: 1px solid #e7ebe5; display: flex; height: 78px; justify-content: space-between; padding: 0 clamp(22px, 7vw, 100px); }.brand { align-items: center; color: #174b35; display: flex; font-size: 26px; font-weight: 700; gap: 8px; letter-spacing: -1.5px; text-decoration: none; }.brand-mark { height: 35px; width: 35px; }.brand-dot { color: #e2743e; }.back-link { border-bottom: 1px solid #e2743e; color: #174b35; font-size: 11px; font-weight: 700; padding-bottom: 5px; text-decoration: none; }.checkout-shell { margin: 0 auto; max-width: 1030px; padding: 58px 32px 80px; }.eyebrow { color: #e2743e; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }.checkout-heading h1 { color: #174b35; font-family: 'Playfair Display', serif; font-size: clamp(42px, 5vw, 62px); letter-spacing: -2.7px; line-height: .98; margin: 16px 0 12px; }.checkout-heading h1 em { color: #e2743e; font-weight: 600; }.checkout-heading p { color: #819087; font-size: 13px; margin: 0; }.checkout-grid { align-items: start; display: grid; gap: 28px; grid-template-columns: minmax(280px, .9fr) minmax(350px, 1.1fr); margin-top: 42px; }.booking-summary, .checkout-form, .success-card { background: #fff; border: 1px solid #e5ebe4; border-radius: 14px; box-shadow: 0 10px 26px rgba(23,75,53,.06); }.booking-summary { padding: 23px; }.booking-summary h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 28px; margin: 10px 0 4px; }.location { color: #829088; font-size: 11px; margin: 0 0 18px; }.location ion-icon { color: #e2743e; vertical-align: middle; }.space-image { border-radius: 9px; display: block; height: 220px; object-fit: cover; width: 100%; }.space-meta { border-bottom: 1px solid #e8eee7; display: grid; gap: 12px; grid-template-columns: 1fr 1fr; padding: 17px 0; }.space-meta div { display: flex; flex-direction: column; gap: 5px; }.space-meta span, .price-row span { color: #89968d; font-size: 10px; }.space-meta strong { color: #174b35; font-size: 12px; }.price-row { align-items: center; display: flex; justify-content: space-between; padding-top: 17px; }.price-row strong { color: #174b35; font-size: 17px; }.price-row small { color: #89968d; font-size: 9px; font-weight: 400; }.checkout-form { display: flex; flex-direction: column; gap: 15px; padding: 26px; }.form-heading { border-bottom: 1px solid #e8eee7; margin-bottom: 3px; padding-bottom: 14px; }.form-heading h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 25px; margin: 8px 0 4px; }.form-heading p { color: #89968d; font-size: 10px; margin: 0; }.checkout-form label:not(.terms) { color: #174b35; display: flex; flex-direction: column; font-size: 10px; font-weight: 700; gap: 7px; }.checkout-form input:not([type='checkbox']), .checkout-form textarea { appearance: none; background: #fff; border: 1px solid #dfe8de; border-radius: 7px; color: #174b35; color-scheme: light; font: inherit; font-size: 11px; outline: 0; padding: 12px; resize: vertical; }.checkout-form input:focus, .checkout-form textarea:focus { border-color: #e2743e; box-shadow: 0 0 0 3px rgba(226,116,62,.12); }.optional { color: #9ba69f; font-weight: 400; }.terms { align-items: start; color: #819087; display: flex; font-size: 9px; font-weight: 400; gap: 8px; line-height: 1.4; }.terms input { accent-color: #e2743e; margin: 1px 0 0; }.submit-button { align-items: center; background: #e2743e; border-radius: 7px; color: #fff; display: flex; font-size: 11px; font-weight: 700; gap: 7px; justify-content: center; padding: 13px; }.submit-button:disabled { cursor: wait; opacity: .7; }.submit-button ion-icon { font-size: 15px; }.secure-note { align-items: center; color: #9aa59e; display: flex; font-size: 9px; gap: 5px; justify-content: center; margin: 0; }.secure-note ion-icon { color: #4b9b61; }.error-message { background: #fce8e5; border-radius: 7px; color: #a33b2d; font-size: 10px; margin: 0; padding: 10px; text-align: center; }.success-card { animation: success-card-in .55s cubic-bezier(.22,1,.36,1) both; align-items: center; display: flex; gap: 18px; margin-top: 42px; padding: 30px; }.success-icon { align-items: center; animation: success-icon-pop .55s .12s cubic-bezier(.22,1,.36,1) both; background: #e5f1e4; border-radius: 50%; color: #4b9b61; display: flex; flex: 0 0 45px; font-size: 24px; height: 45px; justify-content: center; }.success-card .eyebrow, .success-card h2, .success-card p, .success-card a { animation: success-content-in .45s .2s ease both; }.success-card h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 25px; margin: 7px 0 5px; }.success-card p { color: #819087; font-size: 11px; margin: 0; }.success-card a { align-items: center; color: #e2743e; display: flex; font-size: 10px; font-weight: 700; gap: 5px; margin-left: auto; text-decoration: none; white-space: nowrap; }
+.wind-gust { inset: 0; overflow: hidden; pointer-events: none; position: fixed; z-index: 30; }
+.wind-band { height: 44vh; left: 0; overflow: hidden; position: absolute; width: 100%; }
+.wind-top { top: 0; }
+.wind-bottom { bottom: 0; }
+.wind-trail { border: 1px solid transparent; border-radius: 50%; height: 13vh; opacity: 0; position: absolute; will-change: transform, opacity; }
+.wind-top .wind-trail { animation: top-trail 1.05s cubic-bezier(.2, .65, .35, 1) var(--trail-delay) both; border-top-color: rgba(75, 155, 97, .22); left: -44vw; top: var(--trail-offset); transform: rotate(-12deg); width: 40vw; }
+.wind-top .wind-trail::before, .wind-top .wind-trail::after { border: 1px solid transparent; border-radius: 50%; border-top-color: rgba(75, 155, 97, .15); content: ''; height: 100%; left: 8%; position: absolute; top: 4px; transform: rotate(9deg); width: 100%; }
+.wind-top .wind-trail::after { left: 16%; top: 8px; transform: rotate(-5deg); }
+.wind-bottom .wind-trail { animation: bottom-trail 2.15s cubic-bezier(.22, .7, .28, 1) var(--trail-delay) both; border-bottom-color: rgba(226, 116, 62, .2); height: 19vh; right: -48vw; top: var(--trail-offset); transform: rotate(15deg); width: 52vw; }
+.wind-bottom .wind-trail::before, .wind-bottom .wind-trail::after { border: 1px solid transparent; border-bottom-color: rgba(226, 116, 62, .14); border-radius: 50%; content: ''; height: 100%; left: -9%; position: absolute; top: -7px; transform: rotate(-10deg); width: 100%; }
+.wind-bottom .wind-trail::after { left: -17%; top: -14px; transform: rotate(6deg); }
+.wind-leaf { border-radius: 0 85% 0 85%; filter: drop-shadow(0 2px 2px rgba(23, 75, 53, .16)); height: var(--leaf-size); opacity: 0; position: absolute; transform-origin: center; will-change: transform, opacity; }
+.wind-leaf::after { background: rgba(235, 248, 219, .78); content: ''; height: 1px; left: 10%; position: absolute; top: 50%; transform: rotate(-35deg); transform-origin: center; width: 90%; }
+.wind-top .wind-leaf { animation: top-leaf 1.32s cubic-bezier(.15, .75, .3, 1) var(--leaf-delay) both; background: linear-gradient(135deg, #b1d982, #4b9b61 68%, #347b4b); left: -7vw; top: var(--leaf-offset); width: var(--leaf-size); }
+.wind-bottom .wind-leaf { animation: bottom-leaf 2.45s cubic-bezier(.25, .6, .3, 1) var(--leaf-delay) both; background: linear-gradient(135deg, #f3c58a, #e2743e 72%, #bd572e); right: -7vw; top: var(--leaf-offset); width: var(--leaf-size); }
+@keyframes top-trail { 0% { opacity: 0; transform: translate3d(-5vw, 0, 0) rotate(-12deg) scaleX(.3); } 18% { opacity: .9; } 68% { opacity: .5; transform: translate3d(59vw, -2vh, 0) rotate(8deg) scaleX(1.1); } 100% { opacity: 0; transform: translate3d(142vw, 3vh, 0) rotate(-5deg) scaleX(.75); } }
+@keyframes bottom-trail { 0% { opacity: 0; transform: translate3d(8vw, 4vh, 0) rotate(15deg) scaleX(.25); } 22% { opacity: .75; } 58% { opacity: .5; transform: translate3d(-63vw, -5vh, 0) rotate(-10deg) scaleX(1.2); } 100% { opacity: 0; transform: translate3d(-150vw, 0, 0) rotate(8deg) scaleX(.8); } }
+@keyframes top-leaf { 0% { opacity: 0; transform: translate3d(-8vw, 0, 0) rotate(-30deg); } 12% { opacity: .95; } 38% { transform: translate3d(37vw, -4vh, 0) rotate(150deg); } 71% { transform: translate3d(81vw, 3vh, 0) rotate(340deg); } 100% { opacity: 0; transform: translate3d(120vw, -2vh, 0) rotate(520deg); } }
+@keyframes bottom-leaf { 0% { opacity: 0; transform: translate3d(8vw, 0, 0) rotate(45deg); } 16% { opacity: .9; } 42% { transform: translate3d(-34vw, -7vh, 0) rotate(-120deg); } 72% { transform: translate3d(-79vw, 1vh, 0) rotate(-290deg); } 100% { opacity: 0; transform: translate3d(-120vw, -4vh, 0) rotate(-500deg); } }
+@media (prefers-reduced-motion: reduce) { .wind-gust { display: none; } }
 @keyframes success-card-in { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } } @keyframes success-icon-pop { 0% { opacity: 0; transform: scale(.3) rotate(-18deg); } 65% { opacity: 1; transform: scale(1.12) rotate(4deg); } 100% { transform: scale(1) rotate(0); } } @keyframes success-content-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .success-card, .success-icon, .success-card .eyebrow, .success-card h2, .success-card p, .success-card a { animation: none; } }
 @media (max-width: 700px) { .checkout-shell { padding: 42px 18px 55px; }.checkout-grid { grid-template-columns: 1fr; margin-top: 30px; }.checkout-form { padding: 21px 18px; }.success-card { align-items: start; flex-wrap: wrap; margin-top: 30px; padding: 22px; }.success-card a { margin-left: 63px; }.space-image { height: 190px; } }

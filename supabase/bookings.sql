@@ -6,12 +6,207 @@ create table if not exists public.bookings (
   created_at timestamptz not null default now()
 );
 
+alter table public.bookings
+  add column if not exists room_id bigint references public.rooms(id) on delete cascade,
+  add column if not exists bedspace_id bigint references public.bedspaces(id) on delete cascade,
+  add column if not exists request_status text not null default 'pending',
+  add column if not exists tenant_name text,
+  add column if not exists tenant_email text,
+  add column if not exists move_in_date date,
+  add column if not exists message text,
+  add column if not exists amount numeric(10, 2),
+  add column if not exists receipt_token uuid;
+
+create unique index if not exists bookings_receipt_token_idx
+  on public.bookings(receipt_token)
+  where receipt_token is not null;
+
+create unique index if not exists bookings_active_bedspace_idx
+  on public.bookings(bedspace_id)
+  where bedspace_id is not null and request_status in ('pending', 'approved');
+
+create unique index if not exists bookings_active_private_room_idx
+  on public.bookings(room_id)
+  where bedspace_id is null and room_id is not null and request_status in ('pending', 'approved');
+
 alter table public.bookings enable row level security;
 
-create policy "Tenants can create their own bookings"
-on public.bookings for insert
-with check (auth.uid() = tenant_id);
-
+drop policy if exists "Tenants can create their own bookings" on public.bookings;
+drop policy if exists "Tenants can view their own bookings" on public.bookings;
 create policy "Tenants can view their own bookings"
 on public.bookings for select
 using (auth.uid() = tenant_id);
+
+create or replace function public.get_booked_listing_spaces()
+returns table(room_id bigint, bedspace_id bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select b.room_id, b.bedspace_id
+  from public.bookings b
+  join public.spaces s on s.id = b.listing_id
+  where b.request_status in ('pending', 'approved')
+    and b.room_id is not null
+    and s.status = 'published';
+$$;
+
+revoke all on function public.get_booked_listing_spaces() from public;
+grant execute on function public.get_booked_listing_spaces() to anon, authenticated;
+
+create or replace function public.confirm_booking_after_payment(
+  p_receipt_token uuid,
+  p_space_id bigint,
+  p_room_id bigint,
+  p_bedspace_id bigint,
+  p_tenant_name text,
+  p_tenant_email text,
+  p_move_in_date date,
+  p_message text
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  space_type text;
+  booking_amount numeric(10, 2);
+  booking_id bigint;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in before completing a booking.';
+  end if;
+
+  if p_receipt_token is null then
+    raise exception 'The receipt is missing its booking reference.';
+  end if;
+
+  select b.id
+  into booking_id
+  from public.bookings b
+  where b.receipt_token = p_receipt_token
+    and b.tenant_id = current_user_id;
+
+  if booking_id is not null then
+    return booking_id;
+  end if;
+
+  if p_tenant_name is null or length(trim(p_tenant_name)) = 0
+    or p_tenant_email is null or length(trim(p_tenant_email)) = 0
+    or p_move_in_date is null or p_move_in_date < current_date then
+    raise exception 'Booking details are incomplete or the move-in date has passed.';
+  end if;
+
+  select s.type
+  into space_type
+  from public.spaces s
+  where s.id = p_space_id
+    and s.status = 'published'
+  for update;
+
+  if not found then
+    raise exception 'This listing is no longer available.';
+  end if;
+
+  select b.id
+  into booking_id
+  from public.bookings b
+  where b.receipt_token = p_receipt_token
+    and b.tenant_id = current_user_id;
+
+  if booking_id is not null then
+    return booking_id;
+  end if;
+
+  if space_type = 'Private room' then
+    if p_bedspace_id is not null then
+      raise exception 'A private-room booking cannot include a bedspace.';
+    end if;
+
+    select r.monthly_rent
+    into booking_amount
+    from public.rooms r
+    where r.id = p_room_id and r.space_id = p_space_id
+    for update;
+
+    if not found or booking_amount is null then
+      raise exception 'This private room is no longer available.';
+    end if;
+
+    if exists (
+      select 1
+      from public.bookings b
+      where b.room_id = p_room_id
+        and b.bedspace_id is null
+        and b.request_status in ('pending', 'approved')
+    ) then
+      raise exception 'This private room has already been booked.';
+    end if;
+  elsif space_type = 'Bedspace' then
+    if p_bedspace_id is null then
+      raise exception 'Select an individual bedspace to book.';
+    end if;
+
+    perform 1
+    from public.bedspaces bs
+    where bs.id = p_bedspace_id
+      and bs.room_id = p_room_id
+      and bs.space_id = p_space_id
+    for update;
+
+    if not found then
+      raise exception 'This bedspace does not belong to the selected listing and room.';
+    end if;
+
+    select bs.price
+    into booking_amount
+    from public.bedspaces bs
+    where bs.id = p_bedspace_id;
+
+    if exists (
+      select 1
+      from public.bookings b
+      where b.bedspace_id = p_bedspace_id
+        and b.request_status in ('pending', 'approved')
+    ) then
+      raise exception 'This bedspace has already been booked.';
+    end if;
+  else
+    raise exception 'This listing type cannot be booked.';
+  end if;
+
+  insert into public.bookings (
+    tenant_id, listing_id, room_id, bedspace_id, payment_status,
+    request_status, tenant_name, tenant_email, move_in_date, message,
+    amount, receipt_token
+  )
+  values (
+    current_user_id, p_space_id, p_room_id, p_bedspace_id, 'paid',
+    'pending', trim(p_tenant_name), trim(p_tenant_email), p_move_in_date,
+    nullif(trim(p_message), ''), booking_amount, p_receipt_token
+  )
+  on conflict (receipt_token) where receipt_token is not null do nothing
+  returning id into booking_id;
+
+  if booking_id is null then
+    select b.id
+    into booking_id
+    from public.bookings b
+    where b.receipt_token = p_receipt_token
+      and b.tenant_id = current_user_id;
+
+    if booking_id is null then
+      raise exception 'This receipt token has already been used.';
+    end if;
+  end if;
+
+  return booking_id;
+end;
+$$;
+
+revoke all on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) from public;
+grant execute on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) to authenticated;
+drop function if exists public.complete_booking_after_receipt(uuid, bigint, bigint, bigint, text, text, date, text);

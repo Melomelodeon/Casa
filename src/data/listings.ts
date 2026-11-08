@@ -18,6 +18,7 @@ export type Listing = {
 
 export type BookingBed = {
   id: string;
+  roomId?: string;
   name: string;
   status: 'available' | 'occupied';
   row: number;
@@ -36,6 +37,7 @@ export type BookingGridPosition = {
 export type BookingRoom = {
   id: string;
   name: string;
+  status: 'available' | 'occupied';
   image?: string;
   price?: number;
   beds: BookingBed[];
@@ -52,6 +54,17 @@ export type BookingFloor = {
 export type BookingSelection =
   | { kind: 'bed'; value: BookingBed }
   | { kind: 'room'; value: BookingRoom };
+
+export function isListingFullyBooked(listing: Listing): boolean {
+  const rooms = listing.floors?.flatMap((floor) => floor.rooms) ?? [];
+  if (rooms.length === 0) return false;
+  if (listing.type === 'Private room') {
+    return rooms.every((room) => room.status === 'occupied');
+  }
+
+  const beds = rooms.flatMap((room) => room.beds);
+  return beds.length > 0 && beds.every((bed) => bed.status === 'occupied');
+}
 
 export const defaultListingImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
 export const defaultFloorImage = 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85';
@@ -106,7 +119,12 @@ type DatabaseSpace = {
   floors: DatabaseFloor[];
 };
 
-export function mapDatabaseSpaces(records: DatabaseSpace[]): Listing[] {
+export function mapDatabaseSpaces(
+  records: DatabaseSpace[],
+  bookedSpaces: { room_id: number; bedspace_id: number | null }[] = [],
+): Listing[] {
+  const bookedRoomIds = new Set(bookedSpaces.filter((space) => space.bedspace_id === null).map((space) => String(space.room_id)));
+  const bookedBedspaceIds = new Set(bookedSpaces.flatMap((space) => space.bedspace_id === null ? [] : [String(space.bedspace_id)]));
   return records.map((space) => {
     const includedAmenities = new Set<string>();
     const houseRules = new Set<string>();
@@ -122,8 +140,9 @@ export function mapDatabaseSpaces(records: DatabaseSpace[]): Listing[] {
           bedspace.house_rules.forEach((rule) => houseRules.add(rule));
           return {
             id: String(bedspace.id),
+            roomId: String(room.id),
             name: bedspace.name,
-            status: 'available',
+            status: bookedBedspaceIds.has(String(bedspace.id)) ? 'occupied' : 'available',
             row: bedspace.row,
             column: bedspace.column_index,
             image: bedspace.photo_url || undefined,
@@ -135,6 +154,7 @@ export function mapDatabaseSpaces(records: DatabaseSpace[]): Listing[] {
         return {
           id: String(room.id),
           name: room.name,
+          status: bookedRoomIds.has(String(room.id)) ? 'occupied' : 'available',
           image: room.photo_url || defaultRoomImage,
           price: room.monthly_rent === null ? undefined : Number(room.monthly_rent),
           beds,
@@ -196,6 +216,7 @@ export function getBookingFloors(listing: Listing): BookingFloor[] {
     const rooms = Array.from({ length: roomCount }, (_, roomIndex): BookingRoom => ({
       id: `${listing.id}-floor-${floorIndex + 1}-room-${roomIndex + 1}`,
       name: listing.type === 'Private room' ? 'Private room' : `Room ${floorIndex + 1}${roomIndex + 1}`,
+      status: 'available',
       image: floorIndex === 0 && roomIndex === 0 ? listing.image : undefined,
       grid: {
         ...[

@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { mapDatabaseSpaces, type Listing } from '../data/listings';
 import { getSupabaseClient } from '../lib/supabase';
 
@@ -14,13 +14,16 @@ export function usePublishedListings() {
   const listings = ref<Listing[]>([]);
   const isLoading = ref(false);
   const error = ref('');
+  const refreshAfterBooking = () => { void loadListings(); };
 
   async function loadListings() {
     isLoading.value = true;
     error.value = '';
 
     try {
-      const { data, error: queryError } = await getSupabaseClient()
+      const client = getSupabaseClient();
+      const [{ data, error: queryError }, { data: bookedSpaces, error: availabilityError }] = await Promise.all([
+        client
         .from('spaces')
         .select(`
           id, name, location, type, description, monthly_rent, cover_photo_url, latitude, longitude, created_at,
@@ -36,16 +39,22 @@ export function usePublishedListings() {
           )
         `)
         .eq('status', 'published')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }),
+        client.rpc('get_booked_listing_spaces'),
+      ]);
 
       if (queryError) throw queryError;
-      listings.value = mapDatabaseSpaces(data ?? []);
+      if (availabilityError) throw availabilityError;
+      listings.value = mapDatabaseSpaces(data ?? [], bookedSpaces ?? []);
     } catch (loadError) {
       error.value = getErrorMessage(loadError);
     } finally {
       isLoading.value = false;
     }
   }
+
+  onMounted(() => window.addEventListener('casa:booking-completed', refreshAfterBooking));
+  onUnmounted(() => window.removeEventListener('casa:booking-completed', refreshAfterBooking));
 
   return { listings, isLoading, error, loadListings };
 }

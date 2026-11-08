@@ -139,7 +139,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import L, { type Circle, type Map as LeafletMap, type Marker } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
@@ -148,7 +148,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import BookingPanel from '../components/BookingPanel.vue';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
-import { getBookingFloors, type BookingSelection, type Listing } from '../data/listings';
+import { getBookingFloors, isListingFullyBooked, type BookingSelection, type Listing } from '../data/listings';
 import { usePublishedListings } from '../composables/usePublishedListings';
 import {
   arrowForwardOutline,
@@ -206,6 +206,7 @@ const displayName = computed(() => user.value?.user_metadata?.full_name || user.
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
 function getListingTag(listing: Listing) {
+  if (isListingFullyBooked(listing)) return { label: 'Fully booked', variant: 'fully-booked-tag' };
   if (isNewlyAdded(listing)) return { label: 'New', variant: 'new-tag' };
   const rating = Number(listing.rating);
   if (Number.isFinite(rating) && rating >= 4.8) {
@@ -271,14 +272,15 @@ function refreshListingMarkers() {
   filteredListings.value.forEach((listing) => {
     if (!listing.coordinates) return;
     const priceLabel = `${(listing.price / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}k`;
+    const fullyBooked = isListingFullyBooked(listing);
     const icon = L.divIcon({
-      className: 'listing-price-marker',
-      html: `<span>₱${priceLabel}</span>`,
-      iconSize: [54, 34],
-      iconAnchor: [27, 17],
+      className: fullyBooked ? 'listing-price-marker fully-booked-marker' : 'listing-price-marker',
+      html: fullyBooked ? `<span><small>FULL</small>₱${priceLabel}</span>` : `<span>₱${priceLabel}</span>`,
+      iconSize: fullyBooked ? [68, 38] : [54, 34],
+      iconAnchor: fullyBooked ? [34, 19] : [27, 17],
     });
     L.marker([listing.coordinates.latitude, listing.coordinates.longitude], { icon })
-      .bindTooltip(`${listing.name} · ₱${listing.price.toLocaleString()} / month`)
+      .bindTooltip(`${fullyBooked ? 'Fully booked · ' : ''}${listing.name} · ₱${listing.price.toLocaleString()} / month`)
       .on('click', () => { selectedListing.value = listing; })
       .addTo(markerLayer);
   });
@@ -334,10 +336,8 @@ function distanceInMeters(first: L.LatLng, second: L.LatLng) {
     + Math.cos(latitudeOne) * Math.cos(latitudeTwo) * Math.sin(longitudeDelta / 2) ** 2;
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
-onMounted(() => {
-  void loadListings();
-  void nextTick(initializeMap);
-});
+onIonViewWillEnter(() => { void loadListings(); });
+onMounted(() => { void nextTick(initializeMap); });
 function updateScrollIndicator() {
   const element = selectedListingElement.value;
   hasScrollableContent.value = Boolean(element && element.scrollHeight > element.clientHeight + 1);
@@ -377,6 +377,9 @@ function startBooking(selection: BookingSelection) {
     name: 'Checkout',
     query: {
       listingId: String(selectedListing.value.id),
+      roomId: selection.kind === 'room' ? selection.value.id : selection.value.roomId || '',
+      bedspaceId: selection.kind === 'bed' ? selection.value.id : '',
+      selectionKind: selection.kind,
       listing: selectedListing.value.name,
       location: selectedListing.value.location,
       price: String(selection.value.price ?? selectedListing.value.price),
@@ -403,7 +406,11 @@ const filteredListings = computed(() => {
       || listing.type === activeFilter.value;
     return matchesTerm && matchesFilter && matchesNearby;
   });
-  return [...matches].sort((a, b) => sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : a.id - b.id);
+  return [...matches].sort((a, b) => {
+    const availabilityOrder = Number(isListingFullyBooked(a)) - Number(isListingFullyBooked(b));
+    if (availabilityOrder !== 0) return availabilityOrder;
+    return sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : a.id - b.id;
+  });
 });
 watch(filteredListings, refreshListingMarkers);
 
@@ -970,6 +977,12 @@ function clearFilters() {
   color: #174b35;
 }
 
+.listing-badge.fully-booked-tag,
+.selected-label.fully-booked-tag {
+  background: #7541a5;
+  color: #fff;
+}
+
 .favorite-button {
   align-items: center;
   background: rgba(255, 255, 255, .9);
@@ -1183,9 +1196,26 @@ function clearFilters() {
   width: 52px;
 }
 
+:global(.listing-price-marker.fully-booked-marker span) {
+  background: #7541a5;
+  border-radius: 18px;
+  height: 36px;
+  width: 66px;
+}
+
+:global(.listing-price-marker.fully-booked-marker span small) {
+  font-size: 7px;
+  letter-spacing: .5px;
+  margin-right: 3px;
+}
+
 :global(.listing-price-marker:hover span) {
   background: #174b35;
   transform: scale(1.08);
+}
+
+:global(.listing-price-marker.fully-booked-marker:hover span) {
+  background: #5d2f89;
 }
 
 :global(.listing-cluster-marker) {
