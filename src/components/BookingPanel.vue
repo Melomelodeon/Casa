@@ -55,7 +55,6 @@
                 @click="selectBed(bed)"
               >
                 <ion-icon class="bed-icon" :icon="bedOutline" />
-                <small>{{ bed.name }}</small>
                 <span class="bed-status" :class="{ booked: bed.status === 'occupied' }">
                   {{ bed.status === 'occupied' ? 'BOOKED' : 'AVAILABLE' }}
                 </span>
@@ -127,26 +126,14 @@ const selectedBookingDetails = computed(() => {
       canBook: selection.value.status === 'available',
     };
   }
-  if (selection.kind === 'room') {
-    return {
-      selection,
-      image: selection.value.image || defaultRoomImage,
-      fallback: defaultRoomImage,
-      icon: checkmarkCircleOutline,
-      label: 'ROOM READY TO BOOK',
-      name: selection.value.name,
-      subtitle: selectedFloor.value?.name || 'Selected room',
-      canBook: true,
-    };
-  }
   return {
     selection,
-    image: selection.value.image || defaultFloorImage,
-    fallback: defaultFloorImage,
+    image: selection.value.image || defaultRoomImage,
+    fallback: defaultRoomImage,
     icon: checkmarkCircleOutline,
-    label: 'FLOOR READY TO BOOK',
+    label: 'ROOM READY TO BOOK',
     name: selection.value.name,
-    subtitle: `${selection.value.rooms.length} rooms`,
+    subtitle: selectedFloor.value?.name || 'Selected room',
     canBook: true,
   };
 });
@@ -179,18 +166,13 @@ function selectFloor(floor: BookingFloor) {
   selectedFloor.value = floor;
   selectedRoom.value = null;
   selectedBed.value = null;
-  if (props.listing.type === 'Entire boarding house') {
-    selectedBooking.value = { kind: 'floor', value: floor };
-    step.value = 'floors';
-  } else {
-    selectedBooking.value = null;
-    step.value = 'rooms';
-  }
+  selectedBooking.value = null;
+  step.value = 'rooms';
 }
 function selectRoom(room: BookingRoom) {
   selectedRoom.value = room;
   selectedBed.value = null;
-  if (props.listing.type === 'Private room') {
+  if (props.listing.type !== 'Bedspace') {
     selectedBooking.value = { kind: 'room', value: room };
     step.value = 'rooms';
   } else {

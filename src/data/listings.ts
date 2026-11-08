@@ -47,8 +47,7 @@ export type BookingFloor = {
 
 export type BookingSelection =
   | { kind: 'bed'; value: BookingBed }
-  | { kind: 'room'; value: BookingRoom }
-  | { kind: 'floor'; value: BookingFloor };
+  | { kind: 'room'; value: BookingRoom };
 
 export const defaultListingImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
 export const defaultFloorImage = 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85';
@@ -62,7 +61,7 @@ export const listings: Listing[] = [
   { id: 4, name: 'The Olive Room', location: 'Lahug, Cebu City', price: 6500, rating: '4.7', type: 'Bedspace', amenities: 7, includedAmenities: ['Wi-Fi', 'Laundry area', 'Kitchen access', 'Security / CCTV'], houseRules: ['Quiet and respectful', 'Shared areas kept clean'], badge: 'Great value', description: 'Easy, breezy living with a view and room to make it yours.', image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=85' },
   { id: 5, name: 'Moss & Morning', location: 'Diliman, Quezon City', price: 7900, rating: '4.9', type: 'Private room', amenities: 9, includedAmenities: ['Wi-Fi', 'Furnished room', 'Laundry area', 'Quiet study space'], houseRules: ['No smoking indoors', 'Pets by approval'], badge: '', description: 'A quiet, plant-filled home base for busy city days.', image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=85' },
   { id: 6, name: 'The Nook', location: 'Taft, Manila', price: 5800, rating: '4.6', type: 'Bedspace', amenities: 5, includedAmenities: ['Wi-Fi', 'Furnished bed', 'Kitchen access', 'CCTV security'], houseRules: ['Flexible household', 'Shared areas kept clean'], badge: 'Budget pick', description: 'Simple, bright, and close to everything you need.', image: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=900&q=85' },
-  { id: 7, name: 'Casa Verde Boarding House', location: 'Sampaloc, Manila', price: 42000, rating: '4.8', type: 'Entire boarding house', amenities: 12, includedAmenities: ['Wi-Fi', 'Fully furnished', 'Utilities included', 'Shared kitchen', 'Laundry area', 'Security / CCTV'], houseRules: ['No smoking indoors', 'Quiet hours after 10 PM', 'Guests must be registered'], badge: 'Whole property', description: 'A complete, move-in-ready boarding house with flexible shared spaces.', image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=85' },
+  { id: 7, name: 'Casa Verde Boarding House', location: 'Sampaloc, Manila', price: 42000, rating: '4.8', type: 'Boarding house', amenities: 12, includedAmenities: ['Wi-Fi', 'Fully furnished', 'Utilities included', 'Shared kitchen', 'Laundry area', 'Security / CCTV'], houseRules: ['No smoking indoors', 'Quiet hours after 10 PM', 'Guests must be registered'], badge: 'Whole property', description: 'A complete, move-in-ready boarding house with flexible shared spaces.', image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=85' },
 ];
 
 export function getBookingFloors(listing: Listing): BookingFloor[] {
