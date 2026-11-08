@@ -25,7 +25,7 @@
             <p>Residents can now discover and book your space.</p>
           </div><a href="/host/spaces">View my spaces <ion-icon :icon="arrowForwardOutline" /></a>
         </div>
-        <form v-else ref="formElement" class="listing-form" novalidate @submit.prevent="handleSubmit">
+        <form v-else ref="formElement" class="listing-form" novalidate @submit.prevent="goToNextStep">
           <section v-if="currentStep === 1" class="form-card">
             <div class="section-heading"><span class="section-number">01</span>
               <div>
@@ -35,7 +35,19 @@
             </div>
             <div class="field-grid"><label>Space name<input v-model.trim="form.name" required type="text"
                   placeholder="e.g. Sage House" /></label><label>City or area<input v-model.trim="form.location"
-                  required type="text" placeholder="e.g. Poblacion, Makati" /></label></div>
+                  required type="text" placeholder="Choose a point on the map" /></label></div>
+            <div class="location-picker">
+              <div class="location-picker-heading">
+                <div><strong>Pin your space on the map</strong><p>Click the map to set the location and fill in the city or area.</p></div>
+                <button type="button" class="use-location-button" :disabled="isLocating" @click="useCurrentLocation">
+                  {{ isLocating ? 'Finding location…' : 'Use my location' }}
+                </button>
+              </div>
+              <div ref="locationMapElement" class="location-map" role="application" aria-label="Choose your space location by clicking on the map" />
+              <p class="location-picker-status" :class="{ 'location-picker-error': locationError }" aria-live="polite">
+                {{ locationError || locationStatus }}
+              </p>
+            </div>
             <fieldset class="listing-type">
               <legend>What are you listing?</legend>
               <div class="type-options"><label v-for="type in ['Bedspace', 'Private room']" :key="type"
@@ -44,7 +56,7 @@
             </fieldset><label>Description<textarea v-model.trim="form.description" required rows="4"
                 placeholder="Describe what makes this space special..." /></label><label class="cover-photo-field"><span
                 class="photo-field-label">Cover photo</span><span class="photo-dropzone"><input type="file"
-                  accept="image/*" @change="handleCoverPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+                  accept="image/png,image/jpeg,image/webp,image/gif" @change="handleCoverPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
                     coverPhotoName || 'Drop cover photo here or browse' }}</strong><span class="photo-upload-hint">PNG or
                   JPG · 1 photo</span><small>{{ coverPhotoName ? 'Cover photo selected' : 'Choose cover photo'
                   }}</small></span></label>
@@ -58,7 +70,7 @@
             </div>
             <label>Floor name<input v-model.trim="form.floorName" type="text" placeholder="e.g. Ground floor" /></label>
             <label class="floor-photo-field"><span class="photo-field-label">Floor photo</span><span class="photo-dropzone"><input type="file"
-              accept="image/*" @change="handleFloorPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleFloorPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
                 floorPhotoName || 'Drop floor photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
                 floorPhotoName ? 'Floor photo selected' : 'Choose floor photo' }}</small></span></label>
           </section>
@@ -72,13 +84,13 @@
             <label>Room name<input v-model.trim="form.roomName" type="text"
               placeholder="e.g. Sunrise Room" /></label>
             <label class="room-photo-field"><span class="photo-field-label">Room photo</span><span class="photo-dropzone"><input type="file"
-              accept="image/*" @change="handleRoomPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleRoomPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
                 roomPhotoName || 'Drop room photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
                 roomPhotoName ? 'Room photo selected' : 'Choose room photo' }}</small></span></label>
             <template v-if="form.type === 'Private room'">
               <div class="field-grid private-room-space-details">
                 <label>Space name<input v-model.trim="privateRoomSpace.name" type="text" placeholder="e.g. Sunrise Space" /></label>
-                <label>Monthly rent<input v-model.number="privateRoomSpace.price" min="1" type="number" placeholder="8500" /></label>
+                <label>Monthly rent<input v-model.number="privateRoomSpace.price" min="1" required type="number" placeholder="8500" /></label>
               </div>
               <fieldset class="detail-list">
                 <legend>Amenities included</legend>
@@ -175,10 +187,10 @@
             </div></div>
             <div class="field-grid">
               <label>Bedspace name<input v-model.trim="bedspaceDraft.name" type="text" placeholder="e.g. Bed A" /></label>
-              <label>Monthly rent<input v-model.number="bedspaceDraft.price" min="1" type="number" placeholder="8500" /></label>
+              <label>Monthly rent<input v-model.number="bedspaceDraft.price" min="1" required type="number" placeholder="8500" /></label>
             </div>
             <label class="bedspace-photo-field"><span class="photo-field-label">Bedspace photo</span><span class="photo-dropzone bedspace-photo-dropzone">
-              <input type="file" accept="image/*" @change="handleBedspacePhoto" />
+              <input type="file"               accept="image/png,image/jpeg,image/webp,image/gif" @change="handleBedspacePhoto" />
               <ion-icon :icon="cloudUploadOutline" /><strong>{{ bedspaceDraft.image?.name || 'Drop bedspace photo here or browse' }}</strong>
               <span class="photo-upload-hint">PNG or JPG · 1 photo</span>
               <small>{{ bedspaceDraft.image ? 'Bedspace photo selected' : 'Choose bedspace photo' }}</small>
@@ -217,6 +229,7 @@
               <button type="button" class="back-form-button" @click="cancelBedspaceForm">Cancel</button>
               <button type="button" class="submit-button" @click="createBedspace">Add bedspace</button>
             </div>
+            <p v-if="bedspaceError" class="submit-error" role="alert">{{ bedspaceError }}</p>
           </section>
         </div>
         <div v-if="showConfirmation" class="dialog-backdrop" role="presentation" @click.self="closeConfirmation">
@@ -224,9 +237,10 @@
             <span class="dialog-icon"><ion-icon :icon="checkmarkOutline" /></span>
             <h2 id="publish-dialog-title">Publish this listing?</h2>
             <p>Once published, residents will be able to view your listing and request to book it.</p>
+            <p v-if="submitError" class="submit-error" role="alert">{{ submitError }}</p>
             <div class="dialog-actions">
-              <button type="button" class="back-form-button" @click="closeConfirmation">Cancel</button>
-              <button type="button" class="submit-button" @click="confirmPublish">Publish listing</button>
+              <button type="button" class="back-form-button" :disabled="isSubmitting" @click="closeConfirmation">Cancel</button>
+              <button type="button" class="submit-button" :disabled="isSubmitting" @click="confirmPublish">{{ isSubmitting ? 'Publishing…' : 'Publish listing' }}</button>
             </div>
           </section>
         </div>
@@ -236,25 +250,44 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import L, { type Map as LeafletMap, type Marker } from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { addOutline, arrowForwardOutline, bedOutline, checkmarkOutline, cloudUploadOutline, enterOutline, informationCircleOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
 import { useAuthUser } from '../composables/useAuthUser';
+import { getSupabaseClient } from '../lib/supabase';
 
 const { logout } = useLogout();
 const { user } = useAuthUser();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
 const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const form = reactive({ name: '', location: '', type: 'Bedspace', description: '', floorName: '', roomName: '' });
+const locationCoordinates = ref<{ latitude: number; longitude: number } | null>(null);
+const locationMapElement = ref<HTMLDivElement | null>(null);
+const locationStatus = ref('Loading map…');
+const locationError = ref('');
+const isLocating = ref(false);
+let locationMap: LeafletMap | null = null;
+let locationMarker: Marker | null = null;
+let reverseGeocodeController: AbortController | null = null;
+let reverseGeocodeTimer: ReturnType<typeof setTimeout> | undefined;
+let hasSelectedLocation = false;
 const totalSteps = computed(() => form.type === 'Private room' ? 3 : 4);
 const privateRoomSpace = reactive({ name: '', price: 0, amenities: [''], houseRules: [''], maintenance: [''] });
 const bedspaceDraft = reactive({ name: '', price: 0, image: null as File | null, amenities: [''], houseRules: [''], maintenance: [''] });
+const coverPhoto = ref<File | null>(null);
+const floorPhoto = ref<File | null>(null);
+const roomPhoto = ref<File | null>(null);
 const coverPhotoName = ref('');
 const floorPhotoName = ref('');
 const roomPhotoName = ref('');
 const submitted = ref(false);
 const showConfirmation = ref(false);
+const isSubmitting = ref(false);
+const submitError = ref('');
+const bedspaceError = ref('');
 const showAddBedspaceConfirmation = ref(false);
 const showBedspaceForm = ref(false);
 const isPlacingDoor = ref(false);
@@ -285,6 +318,24 @@ const layoutCells = computed(() => Array.from(
 watch(() => form.type, () => {
   if (currentStep.value > totalSteps.value) currentStep.value = totalSteps.value;
 });
+onMounted(() => {
+  void nextTick(initializeLocationMap);
+});
+onBeforeUnmount(() => {
+  if (reverseGeocodeTimer) clearTimeout(reverseGeocodeTimer);
+  reverseGeocodeController?.abort();
+  locationMap?.remove();
+});
+watch(currentStep, async (step) => {
+  if (step === 1) {
+    await nextTick();
+    initializeLocationMap();
+  } else {
+    locationMap?.remove();
+    locationMap = null;
+    locationMarker = null;
+  }
+});
 watch(gridRows, (value) => {
   const occupiedRows = roomSpaces.value.reduce((maximum, space) => Math.max(maximum, space.row), doorPosition.value?.row ?? 1);
   gridRows.value = Math.max(occupiedRows, Math.floor(Number(value) || 1));
@@ -295,25 +346,148 @@ watch(gridColumns, (value) => {
 });
 function handleCoverPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
-  coverPhotoName.value = input.files?.[0]?.name || '';
+  coverPhoto.value = input.files?.[0] ?? null;
+  coverPhotoName.value = coverPhoto.value?.name || '';
 }
 function handleFloorPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
-  floorPhotoName.value = input.files?.[0]?.name || '';
+  floorPhoto.value = input.files?.[0] ?? null;
+  floorPhotoName.value = floorPhoto.value?.name || '';
 }
 function handleRoomPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
-  roomPhotoName.value = input.files?.[0]?.name || '';
+  roomPhoto.value = input.files?.[0] ?? null;
+  roomPhotoName.value = roomPhoto.value?.name || '';
 }
 function handleBedspacePhoto(event: Event) {
   const input = event.target as HTMLInputElement;
   bedspaceDraft.image = input.files?.[0] ?? null;
 }
-function goToNextStep() {
-  currentStep.value += 1;
+function initializeLocationMap() {
+  if (!locationMapElement.value || locationMap) return;
+  locationMap = L.map(locationMapElement.value).setView([12.8797, 121.774], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(locationMap);
+  locationMap.on('click', (event: L.LeafletMouseEvent) => setLocationPin(event.latlng, true));
+  if (locationCoordinates.value) {
+    setLocationPin(L.latLng(locationCoordinates.value.latitude, locationCoordinates.value.longitude), false);
+    locationMap.setView([locationCoordinates.value.latitude, locationCoordinates.value.longitude], 15);
+  } else {
+    locationStatus.value = 'Click the map to choose your space location.';
+    useCurrentLocation();
+  }
+  void nextTick(() => locationMap?.invalidateSize());
 }
-function handleSubmit() {
-  submitted.value = true;
+function setLocationPin(position: L.LatLng, lookupArea: boolean) {
+  if (!locationMap) return;
+  const coordinates = { latitude: position.lat, longitude: position.lng };
+  locationCoordinates.value = coordinates;
+  hasSelectedLocation = true;
+  locationError.value = '';
+  locationStatus.value = 'Location selected.';
+  if (!locationMarker) {
+    locationMarker = L.marker(position, {
+      draggable: true,
+      icon: L.divIcon({
+        className: 'space-location-marker',
+        html: '<span></span>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      }),
+    }).addTo(locationMap);
+    locationMarker.on('dragend', () => {
+      if (locationMarker) setLocationPin(locationMarker.getLatLng(), true);
+    });
+  } else {
+    locationMarker.setLatLng(position);
+  }
+  if (lookupArea) scheduleAreaLookup(coordinates);
+}
+function scheduleAreaLookup(coordinates: { latitude: number; longitude: number }) {
+  if (reverseGeocodeTimer) clearTimeout(reverseGeocodeTimer);
+  reverseGeocodeController?.abort();
+  locationStatus.value = 'Finding city or area…';
+  reverseGeocodeTimer = setTimeout(() => {
+    void lookupArea(coordinates);
+  }, 800);
+}
+async function lookupArea(coordinates: { latitude: number; longitude: number }) {
+  const controller = new AbortController();
+  reverseGeocodeController = controller;
+  try {
+    const query = new URLSearchParams({
+      format: 'jsonv2',
+      lat: String(coordinates.latitude),
+      lon: String(coordinates.longitude),
+      zoom: '18',
+      addressdetails: '1',
+    });
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query}`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Location lookup failed (${response.status}).`);
+    const result = await response.json() as { address?: Record<string, string> };
+    const selectedCoordinates = locationCoordinates.value;
+    if (!selectedCoordinates
+      || selectedCoordinates.latitude !== coordinates.latitude
+      || selectedCoordinates.longitude !== coordinates.longitude) return;
+    const address = result.address ?? {};
+    const street = [address.house_number, address.road || address.residential || address.pedestrian]
+      .filter(Boolean)
+      .join(' ');
+    const area = address.suburb
+      || address.neighbourhood
+      || address.city_district
+      || address.village
+      || address.town
+      || address.city
+      || address.municipality
+      || address.county;
+    const city = address.city || address.town || address.municipality || address.village || address.county;
+    const location = [street, area, city]
+      .filter((part, index, parts) => part && parts.indexOf(part) === index)
+      .join(', ');
+    if (!location) throw new Error('No city or area was found for this map point.');
+    form.location = location;
+    locationStatus.value = `Area set to ${location}.`;
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    locationError.value = error instanceof Error ? error.message : 'Unable to find the city or area for this map point.';
+    locationStatus.value = 'Your map pin is saved; you can still continue.';
+  }
+}
+function useCurrentLocation() {
+  if (!navigator.geolocation) {
+    locationError.value = 'Location access is not available in this browser. Click the map to choose a point.';
+    return;
+  }
+  isLocating.value = true;
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      isLocating.value = false;
+      const coordinates = L.latLng(position.coords.latitude, position.coords.longitude);
+      locationMap?.setView(coordinates, 15);
+      setLocationPin(coordinates, true);
+    },
+    () => {
+      isLocating.value = false;
+      if (hasSelectedLocation) return;
+      locationError.value = 'Could not access your location. Click the map to choose a point.';
+      locationStatus.value = 'Map centered on the Philippines.';
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+  );
+}
+function goToNextStep() {
+  if (currentStep.value === 1 && !locationCoordinates.value) {
+    locationError.value = 'Choose your space location on the map before continuing.';
+    return;
+  }
+  if (!formElement.value?.reportValidity()) return;
+  currentStep.value += 1;
 }
 function requestBedspace(row: number, column: number) {
   selectedCell.value = { row, column };
@@ -338,12 +512,17 @@ function continueToBedspaceDetails() {
 function cancelBedspaceForm() {
   showBedspaceForm.value = false;
   selectedCell.value = null;
+  bedspaceError.value = '';
   resetBedspaceDraft();
 }
 function createBedspace() {
   const cell = selectedCell.value;
   if (!cell) {
     throw new Error('Cannot create a bedspace without a selected grid cell.');
+  }
+  if (!Number.isFinite(Number(bedspaceDraft.price)) || Number(bedspaceDraft.price) < 1) {
+    bedspaceError.value = 'Enter a monthly rent greater than zero.';
+    return;
   }
   roomSpaces.value.push({
     id: Date.now(),
@@ -358,6 +537,7 @@ function createBedspace() {
   });
   showBedspaceForm.value = false;
   selectedCell.value = null;
+  bedspaceError.value = '';
   resetBedspaceDraft();
 }
 function resetBedspaceDraft() {
@@ -369,14 +549,182 @@ function resetBedspaceDraft() {
   bedspaceDraft.maintenance = [''];
 }
 function openConfirmation() {
+  if (!locationCoordinates.value) {
+    currentStep.value = 1;
+    locationError.value = 'Choose your space location on the map before publishing.';
+    return;
+  }
+  if (!formElement.value?.reportValidity()) return;
+  if (form.type === 'Bedspace' && roomSpaces.value.length === 0) return;
   showConfirmation.value = true;
+  submitError.value = '';
 }
 function closeConfirmation() {
+  if (isSubmitting.value) return;
   showConfirmation.value = false;
 }
-function confirmPublish() {
-  closeConfirmation();
-  handleSubmit();
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return 'An unexpected error occurred while publishing the listing.';
+}
+async function confirmPublish() {
+  if (isSubmitting.value) return;
+  isSubmitting.value = true;
+  submitError.value = '';
+  const uploadedPaths: string[] = [];
+  let createdSpaceId: number | null = null;
+  let supabaseClient: ReturnType<typeof getSupabaseClient> | null = null;
+
+  try {
+    const client = getSupabaseClient();
+    supabaseClient = client;
+    const { data: { user: host }, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    if (!host) throw new Error('Sign in again before publishing your listing.');
+    const selectedLocation = locationCoordinates.value;
+    if (!selectedLocation) throw new Error('Choose your space location on the map before publishing.');
+    if (form.type === 'Bedspace' && roomSpaces.value.some((space) => space.price < 1)) {
+      throw new Error('Every bedspace must have a monthly rent greater than zero.');
+    }
+
+    const monthlyRent = form.type === 'Private room'
+      ? Number(privateRoomSpace.price)
+      : Math.min(...roomSpaces.value.map((space) => space.price));
+    if (!Number.isFinite(monthlyRent) || monthlyRent < 1) {
+      throw new Error('Enter a monthly rent greater than zero.');
+    }
+
+    const { data: space, error: spaceError } = await client
+      .from('spaces')
+      .insert({
+        host_id: host.id,
+        name: form.name,
+        location: form.location,
+        type: form.type,
+        description: form.description,
+        monthly_rent: monthlyRent,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        status: 'published',
+      })
+      .select('id')
+      .single();
+    if (spaceError) throw spaceError;
+    createdSpaceId = space.id;
+
+    const uploadPhoto = async (file: File | null, kind: string): Promise<string | null> => {
+      if (!file) return null;
+      if (file.size > 10 * 1024 * 1024) throw new Error(`${kind} photo must be 10 MB or smaller.`);
+      const extensionByMimeType: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+      };
+      const extension = extensionByMimeType[file.type];
+      if (!extension) throw new Error(`${kind} photo must be a PNG, JPG, WEBP, or GIF image.`);
+
+      const path = `${host.id}/${createdSpaceId}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await client.storage
+        .from('space-photos')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      uploadedPaths.push(path);
+      return client.storage.from('space-photos').getPublicUrl(path).data.publicUrl;
+    };
+
+    const coverPhotoUrl = await uploadPhoto(coverPhoto.value, 'Cover');
+    const floorPhotoUrl = await uploadPhoto(floorPhoto.value, 'Floor');
+    const roomPhotoUrl = await uploadPhoto(roomPhoto.value, 'Room');
+    if (coverPhotoUrl) {
+      const { error: coverPhotoError } = await client
+        .from('spaces')
+        .update({ cover_photo_url: coverPhotoUrl })
+        .eq('id', createdSpaceId);
+      if (coverPhotoError) throw coverPhotoError;
+    }
+    const { data: floor, error: floorError } = await client
+      .from('floors')
+      .insert({
+        space_id: createdSpaceId,
+        name: form.floorName || 'Floor 1',
+        photo_url: floorPhotoUrl,
+      })
+      .select('id')
+      .single();
+    if (floorError) throw floorError;
+
+    const isPrivateRoom = form.type === 'Private room';
+    const { data: room, error: roomError } = await client
+      .from('rooms')
+      .insert({
+        space_id: createdSpaceId,
+        floor_id: floor.id,
+        name: (isPrivateRoom ? privateRoomSpace.name : '') || form.roomName || 'Room 1',
+        photo_url: roomPhotoUrl,
+        monthly_rent: isPrivateRoom ? monthlyRent : null,
+        amenities: isPrivateRoom ? privateRoomSpace.amenities.filter((item) => item.trim()) : [],
+        house_rules: isPrivateRoom ? privateRoomSpace.houseRules.filter((item) => item.trim()) : [],
+        maintenance: isPrivateRoom ? privateRoomSpace.maintenance.filter((item) => item.trim()) : [],
+        grid_rows: normalizedRows.value,
+        grid_columns: normalizedColumns.value,
+        door_row: doorPosition.value?.row ?? null,
+        door_column: doorPosition.value?.column ?? null,
+      })
+      .select('id')
+      .single();
+    if (roomError) throw roomError;
+
+    if (!isPrivateRoom) {
+      const bedspaces = [];
+      for (const bedspace of roomSpaces.value) {
+        bedspaces.push({
+          space_id: createdSpaceId,
+          room_id: room.id,
+          name: bedspace.name,
+          price: bedspace.price,
+          row: bedspace.row,
+          column_index: bedspace.column,
+          photo_url: await uploadPhoto(bedspace.image, 'Bedspace'),
+          amenities: bedspace.amenities,
+          house_rules: bedspace.houseRules,
+          maintenance: bedspace.maintenance,
+        });
+      }
+      const { error: bedspacesError } = await client.from('bedspaces').insert(bedspaces);
+      if (bedspacesError) throw bedspacesError;
+    }
+
+    showConfirmation.value = false;
+    submitted.value = true;
+  } catch (error) {
+    const cleanupErrors: string[] = [];
+    if (createdSpaceId !== null && supabaseClient) {
+      if (uploadedPaths.length > 0) {
+        try {
+          const { error: storageCleanupError } = await supabaseClient
+            .storage.from('space-photos').remove(uploadedPaths);
+          if (storageCleanupError) cleanupErrors.push(`Photo cleanup failed: ${storageCleanupError.message}`);
+        } catch (cleanupError) {
+          cleanupErrors.push(`Photo cleanup failed: ${getErrorMessage(cleanupError)}`);
+        }
+      }
+      try {
+        const { error: spaceCleanupError } = await supabaseClient
+          .from('spaces').delete().eq('id', createdSpaceId);
+        if (spaceCleanupError) cleanupErrors.push(`Listing cleanup failed: ${spaceCleanupError.message}`);
+      } catch (cleanupError) {
+        cleanupErrors.push(`Listing cleanup failed: ${getErrorMessage(cleanupError)}`);
+      }
+    }
+    const message = getErrorMessage(error);
+    submitError.value = cleanupErrors.length ? `${message} ${cleanupErrors.join(' ')}` : message;
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 function addItem(items: string[]) {
   items.push('');
@@ -584,6 +932,77 @@ function removeItem(items: string[], index: number) {
   color: #89968d;
   font-size: 10px;
   margin: 0;
+}
+
+.location-picker {
+  margin-top: 20px;
+}
+
+.location-picker-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.location-picker-heading strong {
+  color: #174b35;
+  font-size: 11px;
+}
+
+.location-picker-heading p,
+.location-picker-status {
+  color: #89968d;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.use-location-button {
+  background: #edf5ed;
+  border: 1px solid #d5e5d4;
+  border-radius: 6px;
+  color: #35744a;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 9px 11px;
+}
+
+.use-location-button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.location-map {
+  border: 1px solid #dfe8de;
+  border-radius: 9px;
+  height: 320px;
+  overflow: hidden;
+  position: relative;
+  z-index: 0;
+}
+
+.location-picker-status.location-picker-error {
+  color: #b43e2d;
+}
+
+:deep(.space-location-marker) {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+:deep(.space-location-marker span) {
+  background: #e2743e;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .35);
+  height: 20px;
+  width: 20px;
 }
 
 .field-grid {
@@ -1300,6 +1719,12 @@ fieldset legend {
 
 .bedspace-dialog .dialog-actions {
   justify-content: flex-end;
+}
+
+.submit-error {
+  color: #b43e2d;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 @media (max-width: 700px) {

@@ -192,7 +192,7 @@ const stays = [
 .nav-actions { display: flex; align-items: center; gap: 18px; }
 button { border: 0; cursor: pointer; font: inherit; }
 .login-button { background: transparent; }
-.signup-button { background: #174b35; border-radius: 24px; color: white; font-size: 13px; font-weight: 700; padding: 12px 22px; transition: transform .25s, background .25s; }
+.signup-button { background: #174b35; border-radius: 24px; color: white; font-size: 13px; font-weight: 700; padding: 12px 22px; text-decoration: none; transition: transform .25s, background .25s; }
 .signup-button:hover { background: #e2743e; transform: translateY(-2px); }
 .menu-button { display: none; background: transparent; color: #174b35; font-size: 24px; }
 .hero-section { display: grid; grid-template-columns: 53% 47%; min-height: 510px; padding: 62px 0 70px; position: relative; }

@@ -11,6 +11,7 @@ import HostRequestsPage from '../views/HostRequestsPage.vue'
 import AddSpacePage from '../views/AddSpacePage.vue'
 import PaymentPage from '../views/PaymentPage.vue'
 import ReceiptPage from '../views/ReceiptPage.vue'
+import NotFoundPage from '../views/NotFoundPage.vue'
 import { getSupabaseClient } from '../lib/supabase'
 
 const routes: Array<RouteRecordRaw> = [
@@ -84,6 +85,11 @@ const routes: Array<RouteRecordRaw> = [
     name: 'AddSpace',
     component: AddSpacePage,
     meta: { requiresAuth: true, requiresLandlord: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: NotFoundPage
   }
 ]
 

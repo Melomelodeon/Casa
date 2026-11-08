@@ -2,7 +2,7 @@ export type Listing = {
   id: number;
   name: string;
   location: string;
-  coordinates: { latitude: number; longitude: number };
+  coordinates?: { latitude: number; longitude: number } | null;
   dateAdded?: string | null;
   price: number;
   rating: string;
@@ -13,6 +13,7 @@ export type Listing = {
   badge: string;
   description: string;
   image: string;
+  floors?: BookingFloor[];
 };
 
 export type BookingBed = {
@@ -36,6 +37,7 @@ export type BookingRoom = {
   id: string;
   name: string;
   image?: string;
+  price?: number;
   beds: BookingBed[];
   grid: { rows: number; columns: number; door?: BookingGridPosition };
 };
@@ -56,6 +58,120 @@ export const defaultFloorImage = 'https://images.unsplash.com/photo-1560185008-b
 export const defaultRoomImage = 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=85';
 export const defaultBedImage = 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=85';
 
+type DatabaseBedspace = {
+  id: number;
+  name: string;
+  price: number;
+  row: number;
+  column_index: number;
+  photo_url: string | null;
+  amenities: string[];
+  house_rules: string[];
+  maintenance: string[];
+};
+
+type DatabaseRoom = {
+  id: number;
+  name: string;
+  photo_url: string | null;
+  monthly_rent: number | null;
+  amenities: string[];
+  house_rules: string[];
+  maintenance: string[];
+  grid_rows: number;
+  grid_columns: number;
+  door_row: number | null;
+  door_column: number | null;
+  bedspaces: DatabaseBedspace[];
+};
+
+type DatabaseFloor = {
+  id: number;
+  name: string;
+  photo_url: string | null;
+  rooms: DatabaseRoom[];
+};
+
+type DatabaseSpace = {
+  id: number;
+  name: string;
+  location: string;
+  type: string;
+  description: string;
+  monthly_rent: number;
+  cover_photo_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string;
+  floors: DatabaseFloor[];
+};
+
+export function mapDatabaseSpaces(records: DatabaseSpace[]): Listing[] {
+  return records.map((space) => {
+    const includedAmenities = new Set<string>();
+    const houseRules = new Set<string>();
+    const floors: BookingFloor[] = space.floors.map((floor) => ({
+      id: String(floor.id),
+      name: floor.name,
+      image: floor.photo_url || defaultFloorImage,
+      rooms: floor.rooms.map((room) => {
+        room.amenities.forEach((amenity) => includedAmenities.add(amenity));
+        room.house_rules.forEach((rule) => houseRules.add(rule));
+        const beds: BookingBed[] = room.bedspaces.map((bedspace) => {
+          bedspace.amenities.forEach((amenity) => includedAmenities.add(amenity));
+          bedspace.house_rules.forEach((rule) => houseRules.add(rule));
+          return {
+            id: String(bedspace.id),
+            name: bedspace.name,
+            status: 'available',
+            row: bedspace.row,
+            column: bedspace.column_index,
+            image: bedspace.photo_url || undefined,
+            price: Number(bedspace.price),
+            maintenance: bedspace.maintenance,
+          };
+        });
+
+        return {
+          id: String(room.id),
+          name: room.name,
+          image: room.photo_url || defaultRoomImage,
+          price: room.monthly_rent === null ? undefined : Number(room.monthly_rent),
+          beds,
+          grid: {
+            rows: room.grid_rows,
+            columns: room.grid_columns,
+            door: room.door_row !== null && room.door_column !== null
+              ? { row: room.door_row, column: room.door_column }
+              : undefined,
+          },
+        };
+      }),
+    }));
+
+    return {
+      id: space.id,
+      name: space.name,
+      location: space.location,
+      coordinates: typeof space.latitude === 'number' && Number.isFinite(space.latitude)
+        && typeof space.longitude === 'number' && Number.isFinite(space.longitude)
+        ? { latitude: Number(space.latitude), longitude: Number(space.longitude) }
+        : null,
+      price: Number(space.monthly_rent),
+      rating: '—',
+      type: space.type,
+      amenities: includedAmenities.size,
+      includedAmenities: [...includedAmenities],
+      houseRules: [...houseRules],
+      badge: '',
+      description: space.description,
+      image: space.cover_photo_url || defaultListingImage,
+      dateAdded: space.created_at,
+      floors,
+    };
+  });
+}
+
 export const listings: Listing[] = [
   { id: 1, name: 'The Greenhouse', location: 'Katipunan, Quezon City', coordinates: { latitude: 14.6317, longitude: 121.0737 }, price: 8500, rating: '4.9', type: 'Private room', amenities: 8, includedAmenities: ['Wi-Fi', 'Furnished room', 'Utilities included', 'Kitchen access'], houseRules: ['Quiet and respectful', 'No smoking indoors'], badge: 'Casa favorite', description: 'A sun-filled room near campus with a warm, creative community.', image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=85' },
   { id: 2, name: 'Sage House', location: 'Poblacion, Makati', coordinates: { latitude: 14.5653, longitude: 121.0326 }, price: 7200, rating: '4.8', type: 'Bedspace', amenities: 6, includedAmenities: ['Wi-Fi', 'Laundry area', 'Security / CCTV', 'Shared kitchen'], houseRules: ['Flexible household', 'Guests must be registered'], badge: 'New on Casa', description: 'Thoughtfully designed shared living in the heart of the city.', image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=85' },
@@ -67,6 +183,8 @@ export const listings: Listing[] = [
 ];
 
 export function getBookingFloors(listing: Listing): BookingFloor[] {
+  if (listing.floors) return listing.floors;
+
   const floorCount = listing.type === 'Private room' ? 1 : 2;
   return Array.from({ length: floorCount }, (_, floorIndex): BookingFloor => {
     const roomCount = listing.type === 'Private room' ? 1 : 2;

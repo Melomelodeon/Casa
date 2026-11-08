@@ -68,7 +68,7 @@
 
     <div v-if="selectedBookingDetails" class="selected-booking">
       <img :src="selectedBookingDetails.image" :alt="selectedBookingDetails.name" @error="useFallback($event, selectedBookingDetails.fallback)" />
-      <div><span class="ready-label"><ion-icon :icon="selectedBookingDetails.icon" /> {{ selectedBookingDetails.label }}</span><strong>{{ selectedBookingDetails.name }}</strong><small><ion-icon :icon="homeOutline" /> {{ selectedBookingDetails.subtitle }} · ₱{{ listing.price.toLocaleString() }} / month</small></div>
+      <div><span class="ready-label"><ion-icon :icon="selectedBookingDetails.icon" /> {{ selectedBookingDetails.label }}</span><strong>{{ selectedBookingDetails.name }}</strong><small><ion-icon :icon="homeOutline" /> {{ selectedBookingDetails.subtitle }} · ₱{{ selectedBookingDetails.price.toLocaleString() }} / month</small></div>
       <div v-if="selectedBed?.maintenance?.length" class="selected-booking-history">
         <strong>Maintenance history</strong>
         <ul>
@@ -123,6 +123,7 @@ const selectedBookingDetails = computed(() => {
       label: selection.value.status === 'available' ? 'READY TO BOOK' : 'OCCUPIED',
       name: selection.value.name,
       subtitle: selectedRoom.value?.name || 'Selected bed',
+      price: selection.value.price ?? props.listing.price,
       canBook: selection.value.status === 'available',
     };
   }
@@ -134,6 +135,7 @@ const selectedBookingDetails = computed(() => {
     label: 'ROOM READY TO BOOK',
     name: selection.value.name,
     subtitle: selectedFloor.value?.name || 'Selected room',
+    price: selection.value.price ?? props.listing.price,
     canBook: true,
   };
 });

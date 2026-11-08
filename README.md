@@ -29,7 +29,7 @@ Registration uses Supabase Authentication. Copy `.env.example` to `.env` and set
 
 The signup form stores the selected account type and full name in the new Auth user’s metadata as `role` and `full_name`. If email confirmation is enabled in Supabase, users must confirm their email before signing in.
 
-Run [`supabase/bookings.sql`](./supabase/bookings.sql) in the Supabase SQL Editor to enable booking requests. A signed-in user is required before checkout, and each request is recorded with that user’s Auth ID as `tenant_id`.
+Run [`supabase/spaces.sql`](./supabase/spaces.sql) in the Supabase SQL Editor to create the listing hierarchy, access policies, photo bucket, and listing coordinate columns. Re-run it on existing deployments to add the coordinate columns. Running [`supabase/sample_spaces.sql`](./supabase/sample_spaces.sql) adds 15 sample listings and their related floors, rooms, and bedspaces across existing landlord accounts without deleting existing data. Re-running it skips listings with matching names and locations. Run [`supabase/bookings.sql`](./supabase/bookings.sql) to enable booking requests. A signed-in user is required before checkout, and each request is recorded with that user’s Auth ID as `tenant_id`.
 
 ## System Architecture and Features
 
@@ -54,11 +54,14 @@ Run [`supabase/bookings.sql`](./supabase/bookings.sql) in the Supabase SQL Edito
 
 ## Database Schema (PostgreSQL)
 
-The database model comprises three primary relational tables:
+The listing database model uses four related tables:
 
-* `users`: Stores user credentials and account types (`id`, `name`, `email`, `password_hash`, `role`).
-* `listings`: Contains property information (`id`, `landlord_id`, `title`, `description`, `price`, `location`, `slots_available`, `amenities`).
-* `bookings`: Records reservation transactions (`id`, `tenant_id`, `listing_id`, `payment_status`, `created_at`).
+* `spaces`: Host-owned listing details, monthly starting rent, and cover photo.
+* `floors`: Floor name and optional photo for a space.
+* `rooms`: Room details, layout grid, private-room amenities/rules, and optional rent.
+* `bedspaces`: Per-bed rent, grid position, amenities, rules, maintenance history, and optional photo.
+
+Authentication credentials remain in Supabase Auth. `bookings` records reservation transactions (`tenant_id`, `listing_id`, `payment_status`, `created_at`).
 
 ## License
 

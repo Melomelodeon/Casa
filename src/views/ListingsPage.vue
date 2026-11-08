@@ -39,6 +39,11 @@
           <button class="filter-button" type="button" @click="clearFilters"><ion-icon :icon="optionsOutline" /> Clear filters</button>
         </div>
 
+        <p v-if="listingsError" class="data-message error-message" role="alert">
+          Listings couldn’t be loaded: {{ listingsError }}
+          <button type="button" @click="loadListings">Try again</button>
+        </p>
+        <p v-else-if="isLoading" class="data-message" role="status">Loading available spaces…</p>
         <section class="listing-grid" aria-label="Available Casa listings">
           <article v-for="listing in filteredListings" :key="listing.id" class="listing-card" role="button" tabindex="0" @click="openListing(listing)" @keydown.enter="openListing(listing)">
             <div class="listing-image" :style="{ backgroundImage: `url(${listing.image})` }">
@@ -56,7 +61,7 @@
               <div class="card-footer"><strong>₱{{ listing.price.toLocaleString() }}<small> / month</small></strong><span>{{ listing.type }}</span></div>
             </div>
           </article>
-          <div v-if="filteredListings.length === 0" class="empty-state"><ion-icon :icon="searchOutline" /><h2>Nothing found just yet.</h2><p>Try another area or remove one of your filters.</p><button type="button" @click="clearFilters">Show all spaces</button></div>
+          <div v-if="!isLoading && !listingsError && filteredListings.length === 0" class="empty-state"><ion-icon :icon="searchOutline" /><h2>Nothing found just yet.</h2><p>Try another area or remove one of your filters.</p><button type="button" @click="clearFilters">Show all spaces</button></div>
         </section>
 
         <section class="host-banner">
@@ -99,13 +104,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import BookingPanel from '../components/BookingPanel.vue';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
-import { defaultListingImage, getBookingFloors, listings, type BookingSelection, type Listing } from '../data/listings';
+import { usePublishedListings } from '../composables/usePublishedListings';
+import { defaultListingImage, getBookingFloors, type BookingSelection, type Listing } from '../data/listings';
 import { arrowForwardOutline, heart, heartOutline, locationOutline, mapOutline, optionsOutline, personOutline, searchOutline, star, sparklesOutline } from 'ionicons/icons';
 
 const searchTerm = ref('');
@@ -113,6 +119,7 @@ const typeFilter = ref('all');
 const budgetFilter = ref('all');
 const customBudget = ref('');
 const sortBy = ref('recommended');
+const { listings, isLoading, error: listingsError, loadListings } = usePublishedListings();
 const favorites = ref(new Set<number>());
 const selectedListing = ref<Listing | null>(null);
 const selectedListingElement = ref<HTMLElement | null>(null);
@@ -124,6 +131,7 @@ const { user } = useAuthUser();
 const { logout } = useLogout();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
+onMounted(() => { void loadListings(); });
 function getListingTag(listing: Listing) {
   if (listing.dateAdded) {
     const addedAt = new Date(listing.dateAdded).getTime();
@@ -170,7 +178,7 @@ watch(selectedListing, (listing) => {
 onBeforeUnmount(() => selectedListingResizeObserver?.disconnect());
 const filteredListings = computed(() => {
   const term = searchTerm.value.toLowerCase();
-  const result = listings.filter((listing) => {
+  const result = listings.value.filter((listing) => {
     const searchMatch = !term || `${listing.name} ${listing.location} ${listing.type}`.toLowerCase().includes(term);
     const typeMatch = typeFilter.value === 'all' || listing.type === typeFilter.value;
     const maximumBudget = Number(customBudget.value);
@@ -183,7 +191,10 @@ const filteredListings = computed(() => {
       || (budgetFilter.value === 'custom' && (!customBudget.value || (Number.isFinite(maximumBudget) && maximumBudget > 0 && listing.price <= maximumBudget)));
     return searchMatch && typeMatch && budgetMatch;
   });
-  return [...result].sort((a, b) => sortBy.value === 'price-low' ? a.price - b.price : sortBy.value === 'price-high' ? b.price - a.price : sortBy.value === 'rating' ? Number(b.rating) - Number(a.rating) : a.id - b.id);
+  if (sortBy.value === 'price-low') return [...result].sort((a, b) => a.price - b.price);
+  if (sortBy.value === 'price-high') return [...result].sort((a, b) => b.price - a.price);
+  if (sortBy.value === 'rating') return [...result].sort((a, b) => Number(b.rating) - Number(a.rating));
+  return result;
 });
 function toggleFavorite(id: number) {
   const next = new Set(favorites.value);
@@ -201,7 +212,7 @@ function startBooking(selection: BookingSelection) {
       listingId: String(selectedListing.value.id),
       listing: selectedListing.value.name,
       location: selectedListing.value.location,
-      price: String(selectedListing.value.price),
+      price: String(selection.value.price ?? selectedListing.value.price),
       type: selectedListing.value.type,
       space: selection.value.name,
       image: selection.value.image || selectedListing.value.image || defaultListingImage,
@@ -246,6 +257,7 @@ function clearFilters() {
   box-shadow: 0 0 0 3px rgba(226, 116, 62, .12);
 }
 
+.data-message { color: #78877e; font-size: 12px; margin: 20px 0; }.error-message { color: #a63d2d; }.data-message button { background: transparent; border: 0; color: #e2743e; cursor: pointer; font: inherit; font-weight: 700; margin-left: 6px; text-decoration: underline; }
 .listing-card { cursor: pointer; }.listing-card:focus-visible { outline: 3px solid rgba(226,116,62,.45); outline-offset: 3px; }
 @media (max-width: 580px) { .listings-header { height: 70px; padding: 0 18px; }.header-nav { gap: 10px; }.header-nav a:not(.account-link) { display: none; }.account-link { font-size: 10px !important; }.listings-shell { padding: 37px 18px 45px; }.page-intro { align-items: start; flex-direction: column; gap: 25px; }.page-intro h1 { font-size: 47px; }.map-link { align-self: end; }.search-panel { align-items: stretch; flex-direction: column; gap: 0; margin-top: 30px; padding: 7px; }.search-input { border-bottom: 1px solid #e8ece7; padding: 3px 10px; }.select-filter, .sort-filter { border-bottom: 1px solid #e8ece7; border-left: 0; margin: 0; padding: 12px 10px; }.sort-filter { border: 0; }.listing-grid { grid-template-columns: 1fr; gap: 18px; }.listing-image { height: 235px; }.host-banner { margin-top: 45px; padding: 22px; }.host-banner h2 { font-size: 20px; }.host-banner a { margin-left: 0; } }
 

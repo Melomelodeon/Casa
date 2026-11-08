@@ -31,7 +31,7 @@
             <div>
               <span class="eyebrow">EXPLORE THE MAP</span>
               <h1>Spaces near <em>you.</em></h1>
-              <p>{{ filteredListings.length }} available spaces in this area</p>
+              <p>{{ isLoading ? 'Loading spaces…' : `${filteredListings.length} available spaces in this area` }}</p>
             </div>
             <label class="sort-control">Sort by
               <select v-model="sortBy" aria-label="Sort listings">
@@ -57,6 +57,10 @@
             </button>
           </div>
 
+          <p v-if="listingsError" class="data-message error-message" role="alert">
+            Listings couldn’t be loaded: {{ listingsError }}
+            <button type="button" @click="loadListings">Try again</button>
+          </p>
           <div class="listing-list">
             <article v-for="listing in filteredListings" :key="listing.id" class="listing-card"
               :class="{ active: selectedListing?.id === listing.id }" @click="selectedListing = listing">
@@ -77,7 +81,7 @@
                     amenities</span><strong>₱{{ listing.price.toLocaleString() }}<small> / month</small></strong></div>
               </div>
             </article>
-            <div v-if="filteredListings.length === 0" class="empty-state">
+            <div v-if="!isLoading && !listingsError && filteredListings.length === 0" class="empty-state">
               <ion-icon :icon="searchOutline" />
               <h2>No spaces found yet.</h2>
               <p>Try searching a different area or clearing your filters.</p><button type="button"
@@ -91,7 +95,7 @@
             <div ref="mapElement" class="leaflet-map" role="application"
               aria-label="Map of listings. Click or drag a pin to filter listings within five kilometers." />
             <div class="map-radius-control">
-              <span>{{ nearbyPin ? 'Showing listings within 5 km' : 'Click the map to find nearby listings' }}</span>
+              <span>{{ nearbyPin ? 'Showing listings within 5 km' : unlocatedListingsCount ? `${unlocatedListingsCount} spaces need coordinates to appear on the map` : 'Click the map to find nearby listings' }}</span>
               <button v-if="nearbyPin" type="button" @click="clearNearbyPin">Clear area</button>
             </div>
           </div>
@@ -144,7 +148,8 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import BookingPanel from '../components/BookingPanel.vue';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
-import { getBookingFloors, listings, type BookingSelection, type Listing } from '../data/listings';
+import { getBookingFloors, type BookingSelection, type Listing } from '../data/listings';
+import { usePublishedListings } from '../composables/usePublishedListings';
 import {
   arrowForwardOutline,
   chevronBackOutline,
@@ -175,6 +180,8 @@ const NEARBY_RADIUS_METERS = 5000;
 const searchTerm = ref('');
 const activeFilter = ref('all');
 const sortBy = ref('recommended');
+const { listings, isLoading, error: listingsError, loadListings } = usePublishedListings();
+const unlocatedListingsCount = computed(() => listings.value.filter((listing) => !listing.coordinates).length);
 const mapElement = ref<HTMLDivElement | null>(null);
 const nearbyPin = ref<L.LatLng | null>(null);
 const filterScroller = ref<HTMLElement | null>(null);
@@ -191,6 +198,7 @@ let listingMarkerLayer: L.MarkerClusterGroup | null = null;
 let nearbyPinMarker: Marker | null = null;
 let nearbyRadiusCircle: Circle | null = null;
 let mapResizeObserver: ResizeObserver | null = null;
+let hasFitListingBounds = false;
 const router = useRouter();
 const { user } = useAuthUser();
 const { logout } = useLogout();
@@ -240,21 +248,28 @@ function initializeMap() {
       iconAnchor: [29, 29],
     }),
   }).addTo(leafletMap);
-  const listingBounds = L.latLngBounds(listings.map((listing) =>
-    L.latLng(listing.coordinates.latitude, listing.coordinates.longitude),
-  ));
-  leafletMap.fitBounds(listingBounds, { padding: [30, 30], maxZoom: 7 });
+  fitListingBounds(listings.value);
   leafletMap.on('click', (event: L.LeafletMouseEvent) => setNearbyPin(event.latlng));
   refreshListingMarkers();
   mapResizeObserver = new ResizeObserver(() => leafletMap?.invalidateSize({ pan: false }));
   mapResizeObserver.observe(mapElement.value);
   void nextTick(() => leafletMap?.invalidateSize({ pan: false }));
 }
+function fitListingBounds(source: Listing[]) {
+  if (!leafletMap || hasFitListingBounds) return;
+  const positions = source.flatMap((listing) => listing.coordinates
+    ? [L.latLng(listing.coordinates.latitude, listing.coordinates.longitude)]
+    : []);
+  if (positions.length === 0) return;
+  leafletMap.fitBounds(L.latLngBounds(positions), { padding: [30, 30], maxZoom: 7 });
+  hasFitListingBounds = true;
+}
 function refreshListingMarkers() {
   if (!listingMarkerLayer) return;
   const markerLayer = listingMarkerLayer;
   markerLayer.clearLayers();
   filteredListings.value.forEach((listing) => {
+    if (!listing.coordinates) return;
     const priceLabel = `${(listing.price / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}k`;
     const icon = L.divIcon({
       className: 'listing-price-marker',
@@ -320,6 +335,7 @@ function distanceInMeters(first: L.LatLng, second: L.LatLng) {
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 onMounted(() => {
+  void loadListings();
   void nextTick(initializeMap);
 });
 function updateScrollIndicator() {
@@ -351,6 +367,10 @@ onBeforeUnmount(() => {
   leafletMap?.remove();
   leafletMap = null;
 });
+watch(listings, (loadedListings) => {
+  fitListingBounds(loadedListings);
+  refreshListingMarkers();
+});
 function startBooking(selection: BookingSelection) {
   if (!selectedListing.value) return;
   void router.push({
@@ -359,7 +379,7 @@ function startBooking(selection: BookingSelection) {
       listingId: String(selectedListing.value.id),
       listing: selectedListing.value.name,
       location: selectedListing.value.location,
-      price: String(selectedListing.value.price),
+      price: String(selection.value.price ?? selectedListing.value.price),
       type: selectedListing.value.type,
       space: selection.value.name,
       image: selection.value.image || selectedListing.value.image,
@@ -369,10 +389,13 @@ function startBooking(selection: BookingSelection) {
 
 const filteredListings = computed(() => {
   const term = searchTerm.value.toLowerCase();
-  const matches = listings.filter((listing) => {
+  const matches = listings.value.filter((listing) => {
     const matchesTerm = !term || `${listing.name} ${listing.location} ${listing.type}`.toLowerCase().includes(term);
-    const listingPosition = L.latLng(listing.coordinates.latitude, listing.coordinates.longitude);
-    const matchesNearby = !nearbyPin.value || distanceInMeters(nearbyPin.value, listingPosition) <= NEARBY_RADIUS_METERS;
+    const matchesNearby = !nearbyPin.value || Boolean(listing.coordinates
+      && distanceInMeters(
+        nearbyPin.value,
+        L.latLng(listing.coordinates.latitude, listing.coordinates.longitude),
+      ) <= NEARBY_RADIUS_METERS);
     const matchesFilter = activeFilter.value === 'all'
       || (activeFilter.value === 'highly-rated' && Number(listing.rating) >= 4.8)
       || (activeFilter.value === 'budget-friendly' && listing.price <= 8000)
@@ -412,6 +435,27 @@ function clearFilters() {
 
 .browse-content {
   --background: #fbfaf7;
+}
+
+.data-message {
+  color: #78877e;
+  font-size: 12px;
+  margin: 20px 0;
+}
+
+.error-message {
+  color: #a63d2d;
+}
+
+.data-message button {
+  background: transparent;
+  border: 0;
+  color: #e2743e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  margin-left: 6px;
+  text-decoration: underline;
 }
 
 .browse-header {
