@@ -2,19 +2,119 @@
   <ion-page>
     <ion-content :fullscreen="true" class="host-content">
       <header class="host-header">
-        <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
-        <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a class="active" href="/host/spaces">My spaces</a><a href="/host/requests">Requests <span class="nav-count">2</span></a></nav>
-        <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
+        <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt=""
+            class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
+        <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a class="active"
+            href="/host/spaces">My spaces</a><a href="/host/requests">Requests <span class="nav-count">2</span></a>
+        </nav>
+        <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName
+            }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
       <main class="host-shell">
         <a class="back-link" href="/host/spaces">← Back to my spaces</a>
-        <div class="page-heading"><div><span class="eyebrow">CREATE A LISTING</span><h1>Add a space.</h1><p>Share the details that help residents picture themselves at home.</p></div><span class="step-label">STEP {{ submitted ? 3 : 1 }} OF 3</span></div>
-        <div v-if="submitted" class="success-card" role="status"><span class="success-icon"><ion-icon :icon="checkmarkOutline" /></span><div><span class="eyebrow">DRAFT SAVED</span><h2>Your space is ready for review.</h2><p>Casa will review your listing before it goes live to residents.</p></div><a href="/host/spaces">View my spaces <ion-icon :icon="arrowForwardOutline" /></a></div>
-        <form v-else class="listing-form" @submit.prevent="submitForm">
-          <section class="form-card"><div class="section-heading"><span class="section-number">01</span><div><h2>Tell us about your space</h2><p>Start with the basics residents need to know.</p></div></div><div class="field-grid"><label>Space name<input v-model.trim="form.name" required type="text" placeholder="e.g. Sage House" /></label><label>City or area<input v-model.trim="form.location" required type="text" placeholder="e.g. Poblacion, Makati" /></label></div><fieldset class="listing-type"><legend>What are you listing?</legend><div class="type-options"><label v-for="type in ['Bedspace', 'Private room', 'Boarding house']" :key="type" class="type-option"><input v-model="form.type" name="listing-type" type="radio" :value="type" /> <span>{{ type }}</span></label></div></fieldset><label>Description<textarea v-model.trim="form.description" required rows="4" placeholder="Describe what makes this space special..." /></label></section>
-          <section class="form-card"><div class="section-heading"><span class="section-number">02</span><div><h2>Space details</h2><p>Help residents understand what is included.</p></div></div><div class="field-grid"><label>Monthly rent<input v-model.number="form.price" required min="1" type="number" placeholder="8500" /></label><label>Available spaces<input v-model.number="form.available" required min="1" type="number" placeholder="3" /></label><label>Move-in date<input v-model="form.moveIn" required type="date" /></label></div><fieldset class="detail-list"><legend>Amenities included</legend><div class="repeatable-list"><div v-for="(_, index) in form.amenities" :key="`amenity-${index}`" class="repeatable-row"><input v-model.trim="form.amenities[index]" type="text" placeholder="e.g. Wi-Fi" :aria-label="`Amenity ${index + 1}`" /><button v-if="form.amenities.length > 1" type="button" class="remove-item" :aria-label="`Remove amenity ${index + 1}`" @click="removeItem(form.amenities, index)">×</button></div></div><button type="button" class="add-item" @click="addItem(form.amenities)">+ Add another amenity</button></fieldset><fieldset class="detail-list"><legend>House rules</legend><div class="repeatable-list"><div v-for="(_, index) in form.houseRules" :key="`rule-${index}`" class="repeatable-row"><input v-model.trim="form.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM" :aria-label="`House rule ${index + 1}`" /><button v-if="form.houseRules.length > 1" type="button" class="remove-item" :aria-label="`Remove house rule ${index + 1}`" @click="removeItem(form.houseRules, index)">×</button></div></div><button type="button" class="add-item" @click="addItem(form.houseRules)">+ Add another house rule</button></fieldset><fieldset class="detail-list"><legend>Maintenance history</legend><div class="repeatable-list"><div v-for="(_, index) in form.maintenance" :key="`maintenance-${index}`" class="repeatable-row"><input v-model.trim="form.maintenance[index]" type="text" placeholder="e.g. Room deep-cleaned and sanitized" :aria-label="`Maintenance entry ${index + 1}`" /><button v-if="form.maintenance.length > 1" type="button" class="remove-item" :aria-label="`Remove maintenance entry ${index + 1}`" @click="removeItem(form.maintenance, index)">×</button></div></div><button type="button" class="add-item" @click="addItem(form.maintenance)">+ Add maintenance entry</button></fieldset></section>
-          <section class="form-card"><div class="section-heading"><span class="section-number">03</span><div><h2>Add photos</h2><p>Listings with clear photos get more interest.</p></div></div><label class="upload-area"><input type="file" accept="image/*" multiple @change="handleFiles" /><ion-icon :icon="cloudUploadOutline" /><strong>Drop photos here or browse</strong><span>PNG or JPG · up to 10 photos</span><small v-if="photoCount">{{ photoCount }} photo{{ photoCount === 1 ? '' : 's' }} selected</small></label></section>
-          <div class="form-actions"><button class="submit-button" type="submit">Review listing <ion-icon :icon="arrowForwardOutline" /></button></div>
+        <div class="page-heading">
+          <div><span class="eyebrow">CREATE A LISTING</span>
+            <h1>Add a space.</h1>
+            <p>Share the details that help residents picture themselves at home.</p>
+          </div><span class="step-label">STEP {{ submitted ? 3 : currentStep }} OF 3</span>
+        </div>
+        <div v-if="submitted" class="success-card" role="status"><span class="success-icon"><ion-icon
+              :icon="checkmarkOutline" /></span>
+          <div><span class="eyebrow">DRAFT SAVED</span>
+            <h2>Your space is ready for review.</h2>
+            <p>Casa will review your listing before it goes live to residents.</p>
+          </div><a href="/host/spaces">View my spaces <ion-icon :icon="arrowForwardOutline" /></a>
+        </div>
+        <form v-else ref="formElement" class="listing-form" novalidate @submit.prevent="handleSubmit">
+          <section v-if="currentStep === 1" class="form-card">
+            <div class="section-heading"><span class="section-number">01</span>
+              <div>
+                <h2>Tell us about your space</h2>
+                <p>Start with the basics residents need to know.</p>
+              </div>
+            </div>
+            <div class="field-grid"><label>Space name<input v-model.trim="form.name" required type="text"
+                  placeholder="e.g. Sage House" /></label><label>City or area<input v-model.trim="form.location"
+                  required type="text" placeholder="e.g. Poblacion, Makati" /></label></div>
+            <fieldset class="listing-type">
+              <legend>What are you listing?</legend>
+              <div class="type-options"><label v-for="type in ['Bedspace', 'Private room']" :key="type"
+                  class="type-option"><input v-model="form.type" name="listing-type" type="radio" :value="type" />
+                  <span>{{ type }}</span></label></div>
+            </fieldset><label>Description<textarea v-model.trim="form.description" required rows="4"
+                placeholder="Describe what makes this space special..." /></label><label class="cover-photo-field"><span
+                class="photo-field-label">Cover photo</span><span class="photo-dropzone"><input type="file"
+                  accept="image/*" @change="handleCoverPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+                    coverPhotoName || 'Drop cover photo here or browse' }}</strong><span class="photo-upload-hint">PNG or
+                  JPG · 1 photo</span><small>{{ coverPhotoName ? 'Cover photo selected' : 'Choose cover photo'
+                  }}</small></span></label>
+          </section>
+          <section v-if="currentStep === 2" class="form-card">
+            <div class="section-heading"><span class="section-number">02</span>
+              <div>
+                <h2>Space details</h2>
+                <p>Help residents understand what is included.</p>
+              </div>
+            </div>
+            <div class="field-grid"><label>Room name<input v-model.trim="form.roomName" type="text"
+                  placeholder="e.g. Sunrise Room" /></label><label>Monthly rent<input v-model.number="form.price"
+                  required min="1" type="number" placeholder="8500" /></label></div><label class="room-photo-field"><span
+                class="photo-field-label">Room photo</span><span class="photo-dropzone"><input type="file"
+                  accept="image/*" @change="handleRoomPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+                    roomPhotoName || 'Drop room photo here or browse' }}</strong><span class="photo-upload-hint">PNG or
+                  JPG · 1 photo</span><small>{{ roomPhotoName ? 'Room photo selected' : 'Choose room photo'
+                  }}</small></span></label>
+            <fieldset class="detail-list">
+              <legend>Amenities included</legend>
+              <div class="repeatable-list">
+                <div v-for="(_, index) in form.amenities" :key="`amenity-${index}`" class="repeatable-row"><input
+                    v-model.trim="form.amenities[index]" type="text" placeholder="e.g. Wi-Fi"
+                    :aria-label="`Amenity ${index + 1}`" /><button v-if="form.amenities.length > 1" type="button"
+                    class="remove-item" :aria-label="`Remove amenity ${index + 1}`"
+                    @click="removeItem(form.amenities, index)">×</button></div>
+              </div><button type="button" class="add-item" @click="addItem(form.amenities)">+ Add another
+                amenity</button>
+            </fieldset>
+            <fieldset class="detail-list">
+              <legend>House rules</legend>
+              <div class="repeatable-list">
+                <div v-for="(_, index) in form.houseRules" :key="`rule-${index}`" class="repeatable-row"><input
+                    v-model.trim="form.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM"
+                    :aria-label="`House rule ${index + 1}`" /><button v-if="form.houseRules.length > 1" type="button"
+                    class="remove-item" :aria-label="`Remove house rule ${index + 1}`"
+                    @click="removeItem(form.houseRules, index)">×</button></div>
+              </div><button type="button" class="add-item" @click="addItem(form.houseRules)">+ Add another house
+                rule</button>
+            </fieldset>
+            <fieldset class="detail-list">
+              <legend>Maintenance history</legend>
+              <div class="repeatable-list">
+                <div v-for="(_, index) in form.maintenance" :key="`maintenance-${index}`" class="repeatable-row"><input
+                    v-model.trim="form.maintenance[index]" type="text"
+                    placeholder="e.g. Room deep-cleaned and sanitized"
+                    :aria-label="`Maintenance entry ${index + 1}`" /><button v-if="form.maintenance.length > 1"
+                    type="button" class="remove-item" :aria-label="`Remove maintenance entry ${index + 1}`"
+                    @click="removeItem(form.maintenance, index)">×</button></div>
+              </div><button type="button" class="add-item" @click="addItem(form.maintenance)">+ Add maintenance
+                entry</button>
+            </fieldset>
+          </section>
+          <section v-if="currentStep === 3" class="form-card">
+            <div class="section-heading"><span class="section-number">03</span>
+              <div>
+                <h2>Add photos</h2>
+                <p>Listings with clear photos get more interest.</p>
+              </div>
+            </div><label class="upload-area"><input type="file" accept="image/*" multiple
+                @change="handleFiles" /><ion-icon :icon="cloudUploadOutline" /><strong>{{ photoCount ? `${photoCount}
+                photo${photoCount === 1 ? '' : 's'} selected` : 'Drop photos here or browse' }}</strong><span>PNG or JPG
+                · up to 10 photos</span><small>{{ photoCount ? 'Add more photos' : 'Choose listing photos'
+                }}</small></label>
+          </section>
+          <div class="form-actions"><button v-if="currentStep > 1" class="back-form-button" type="button"
+              @click="currentStep--">Back</button><button v-if="currentStep < 3" class="submit-button" type="button"
+              @click="goToNextStep">Continue <ion-icon :icon="arrowForwardOutline" /></button><button v-else
+              class="submit-button" type="submit">Review listing <ion-icon :icon="arrowForwardOutline" /></button></div>
         </form>
       </main>
     </ion-content>
@@ -32,14 +132,29 @@ const { logout } = useLogout();
 const { user } = useAuthUser();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
 const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
-const form = reactive({ name: '', location: '', type: 'Bedspace', description: '', price: 0, available: 1, moveIn: '', amenities: [''], houseRules: [''], maintenance: [''] });
+const form = reactive({ name: '', location: '', type: 'Bedspace', description: '', price: 0, roomName: '', amenities: [''], houseRules: [''], maintenance: [''] });
 const photoCount = ref(0);
+const coverPhotoName = ref('');
+const roomPhotoName = ref('');
 const submitted = ref(false);
+const currentStep = ref(1);
+const formElement = ref<HTMLFormElement | null>(null);
 function handleFiles(event: Event) {
   const input = event.target as HTMLInputElement;
   photoCount.value = input.files?.length || 0;
 }
-function submitForm() {
+function handleCoverPhoto(event: Event) {
+  const input = event.target as HTMLInputElement;
+  coverPhotoName.value = input.files?.[0]?.name || '';
+}
+function handleRoomPhoto(event: Event) {
+  const input = event.target as HTMLInputElement;
+  roomPhotoName.value = input.files?.[0]?.name || '';
+}
+function goToNextStep() {
+  currentStep.value += 1;
+}
+function handleSubmit() {
   submitted.value = true;
 }
 function addItem(items: string[]) {
@@ -52,6 +167,560 @@ function removeItem(items: string[], index: number) {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&display=swap');
-:global(body) { background: #f7f8f4; color: #174b35; font-family: 'DM Sans', sans-serif; } :global(*) { box-sizing: border-box; }.host-content { --background: #f7f8f4; }.host-header { align-items: center; background: #fff; border-bottom: 1px solid #e5ebe4; display: flex; height: 78px; justify-content: space-between; padding: 0 clamp(22px, 5vw, 74px); }.brand { align-items: center; color: #174b35; display: flex; font-size: 26px; font-weight: 700; gap: 8px; letter-spacing: -1.5px; text-decoration: none; }.brand-mark { height: 35px; width: 35px; }.brand-dot { color: #e2743e; }.host-nav { display: flex; gap: 28px; }.host-nav a { color: #849087; font-size: 11px; font-weight: 600; padding: 29px 0 25px; text-decoration: none; }.host-nav a.active { border-bottom: 2px solid #e2743e; color: #174b35; }.nav-count { background: #e2743e; border-radius: 10px; color: #fff; font-size: 8px; margin-left: 3px; padding: 2px 5px; }.host-account { align-items: center; display: flex; gap: 9px; }.avatar { align-items: center; background: #dcebdd; border-radius: 50%; color: #35744a; display: flex; font-size: 10px; font-weight: 700; height: 32px; justify-content: center; width: 32px; }.host-name { color: #174b35; font-size: 11px; font-weight: 700; }.host-account button { background: transparent; border: 0; color: #99a59d; cursor: pointer; font: inherit; font-size: 10px; margin-left: 10px; padding: 0; }.host-shell { margin: 0 auto; max-width: 930px; padding: 45px 32px 75px; }.back-link { color: #e2743e; display: inline-block; font-size: 10px; font-weight: 700; margin-bottom: 24px; text-decoration: none; }.page-heading { align-items: end; display: flex; justify-content: space-between; }.eyebrow { color: #e2743e; display: block; font-size: 10px; font-weight: 700; letter-spacing: 1.8px; }.page-heading h1 { color: #174b35; font-family: 'Playfair Display', serif; font-size: clamp(42px, 5vw, 58px); letter-spacing: -2px; margin: 13px 0 8px; }.page-heading p { color: #849087; font-size: 12px; margin: 0; }.step-label { color: #89968d; font-size: 10px; font-weight: 700; }.listing-form { display: flex; flex-direction: column; gap: 17px; margin-top: 37px; }.form-card, .success-card { background: #fff; border: 1px solid #e5ebe4; border-radius: 12px; padding: 25px; }.section-heading { align-items: start; display: flex; gap: 13px; margin-bottom: 22px; }.section-number { color: #e2743e; font-family: 'Playfair Display', serif; font-size: 19px; }.section-heading h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 23px; margin: 0 0 4px; }.section-heading p { color: #89968d; font-size: 10px; margin: 0; }.field-grid { display: grid; gap: 15px; grid-template-columns: 1fr 1fr; }.form-card label, fieldset legend { color: #174b35; display: flex; flex-direction: column; font-size: 10px; font-weight: 700; gap: 7px; }.form-card > label { margin-top: 17px; }.form-card input:not([type='checkbox']):not([type='radio']):not([type='file']), .form-card textarea, .form-card select { appearance: none; background: #fff; border: 1px solid #dfe8de; border-radius: 7px; color: #174b35; color-scheme: light; font: inherit; font-size: 11px; outline: 0; padding: 12px; }.form-card input:focus, .form-card textarea:focus, .form-card select:focus { border-color: #e2743e; box-shadow: 0 0 0 3px rgba(226,116,62,.12); }.listing-type { border: 0; margin: 20px 0 0; padding: 0; }.type-options { display: flex; flex-wrap: wrap; gap: 8px; }.type-option { align-items: center; background: #f7f8f4; border: 1px solid #dfe8de; border-radius: 6px; color: #718177; cursor: pointer; flex-direction: row !important; font-size: 10px !important; font-weight: 400 !important; gap: 7px !important; padding: 10px 12px; }.type-option:has(input:checked) { background: #e5f1e4; border-color: #76ae80; color: #35744a; font-weight: 700 !important; }.type-option input { accent-color: #4b9b61; margin: 0; }.form-card fieldset:not(.listing-type) { border: 0; margin: 20px 0 0; padding: 0; }.detail-list legend { display: block; }.repeatable-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }.repeatable-row { align-items: center; display: flex; gap: 8px; }.repeatable-row input { flex: 1; min-width: 0; }.remove-item { align-items: center; background: #f9ece6; border-radius: 50%; color: #c9683b; display: flex; flex: 0 0 27px; font-size: 18px; height: 27px; justify-content: center; line-height: 1; padding: 0; }.add-item { background: transparent; color: #e2743e; font-size: 10px; font-weight: 700; margin-top: 9px; padding: 0; }.upload-area { align-items: center; background: #fbfcfa; border: 1.5px dashed #b9cbb9; border-radius: 9px; cursor: pointer; justify-content: center; min-height: 170px; padding: 25px; text-align: center; }.upload-area input { display: none; }.upload-area ion-icon { color: #4b9b61; font-size: 30px; }.upload-area strong { color: #174b35; font-size: 12px; }.upload-area span, .upload-area small { color: #89968d; font-size: 9px; font-weight: 400; }.upload-area small { color: #e2743e; font-weight: 700; }.form-actions { align-items: center; display: flex; justify-content: flex-end; }.submit-button { align-items: center; background: #e2743e; border-radius: 7px; color: #fff; display: flex; font-size: 11px; font-weight: 700; gap: 7px; padding: 13px 17px; }.success-card { align-items: center; display: flex; gap: 18px; margin-top: 40px; }.success-icon { align-items: center; background: #e5f1e4; border-radius: 50%; color: #4b9b61; display: flex; flex: 0 0 45px; font-size: 24px; height: 45px; justify-content: center; width: 45px; }.success-card h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 25px; margin: 7px 0 5px; }.success-card p { color: #819087; font-size: 11px; margin: 0; }.success-card a { align-items: center; color: #e2743e; display: flex; font-size: 10px; font-weight: 700; gap: 5px; margin-left: auto; text-decoration: none; white-space: nowrap; }
-@media (max-width: 700px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account button { display: none; }.host-shell { padding: 38px 18px 55px; }.page-heading { align-items: start; flex-direction: column; gap: 22px; }.form-card { padding: 19px 16px; }.form-actions { align-items: stretch; }.submit-button { justify-content: center; width: 100%; }.success-card { align-items: start; flex-wrap: wrap; padding: 20px; }.success-card a { margin-left: 63px; } }
+
+:global(body) {
+  background: #f7f8f4;
+  color: #174b35;
+  font-family: 'DM Sans', sans-serif;
+}
+
+:global(*) {
+  box-sizing: border-box;
+}
+
+.host-content {
+  --background: #f7f8f4;
+}
+
+.host-header {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #e5ebe4;
+  display: flex;
+  height: 78px;
+  justify-content: space-between;
+  padding: 0 clamp(22px, 5vw, 74px);
+}
+
+.brand {
+  align-items: center;
+  color: #174b35;
+  display: flex;
+  font-size: 26px;
+  font-weight: 700;
+  gap: 8px;
+  letter-spacing: -1.5px;
+  text-decoration: none;
+}
+
+.brand-mark {
+  height: 35px;
+  width: 35px;
+}
+
+.brand-dot {
+  color: #e2743e;
+}
+
+.host-nav {
+  display: flex;
+  gap: 28px;
+}
+
+.host-nav a {
+  color: #849087;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 29px 0 25px;
+  text-decoration: none;
+}
+
+.host-nav a.active {
+  border-bottom: 2px solid #e2743e;
+  color: #174b35;
+}
+
+.nav-count {
+  background: #e2743e;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 8px;
+  margin-left: 3px;
+  padding: 2px 5px;
+}
+
+.host-account {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.avatar {
+  align-items: center;
+  background: #dcebdd;
+  border-radius: 50%;
+  color: #35744a;
+  display: flex;
+  font-size: 10px;
+  font-weight: 700;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.host-name {
+  color: #174b35;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.host-account button {
+  background: transparent;
+  border: 0;
+  color: #99a59d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  margin-left: 10px;
+  padding: 0;
+}
+
+.host-shell {
+  margin: 0 auto;
+  max-width: 930px;
+  padding: 45px 32px 75px;
+}
+
+.back-link {
+  color: #e2743e;
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-decoration: none;
+}
+
+.page-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  color: #e2743e;
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+}
+
+.page-heading h1 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(42px, 5vw, 58px);
+  letter-spacing: -2px;
+  margin: 13px 0 8px;
+}
+
+.page-heading p {
+  color: #849087;
+  font-size: 12px;
+  margin: 0;
+}
+
+.step-label {
+  color: #89968d;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.listing-form {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  margin-top: 37px;
+}
+
+.form-card,
+.success-card {
+  background: #fff;
+  border: 1px solid #e5ebe4;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.section-heading {
+  align-items: start;
+  display: flex;
+  gap: 13px;
+  margin-bottom: 22px;
+}
+
+.section-number {
+  color: #e2743e;
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+}
+
+.section-heading h2 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 23px;
+  margin: 0 0 4px;
+}
+
+.section-heading p {
+  color: #89968d;
+  font-size: 10px;
+  margin: 0;
+}
+
+.field-grid {
+  display: grid;
+  gap: 15px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.form-card label,
+fieldset legend {
+  color: #174b35;
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 7px;
+}
+
+.form-card>label {
+  margin-top: 17px;
+}
+
+.form-card input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.form-card textarea,
+.form-card select {
+  appearance: none;
+  background: #fff;
+  border: 1px solid #dfe8de;
+  border-radius: 7px;
+  color: #174b35;
+  color-scheme: light;
+  font: inherit;
+  font-size: 11px;
+  outline: 0;
+  padding: 12px;
+}
+
+.form-card input:focus,
+.form-card textarea:focus,
+.form-card select:focus {
+  border-color: #e2743e;
+  box-shadow: 0 0 0 3px rgba(226, 116, 62, .12);
+}
+
+.listing-type {
+  border: 0;
+  margin: 20px 0 0;
+  padding: 0;
+}
+
+.type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.type-option {
+  align-items: center;
+  background: #f7f8f4;
+  border: 1px solid #dfe8de;
+  border-radius: 6px;
+  color: #718177;
+  cursor: pointer;
+  flex-direction: row !important;
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  gap: 7px !important;
+  padding: 10px 12px;
+}
+
+.type-option:has(input:checked) {
+  background: #e5f1e4;
+  border-color: #76ae80;
+  color: #35744a;
+  font-weight: 700 !important;
+}
+
+.type-option input {
+  accent-color: #4b9b61;
+  margin: 0;
+}
+
+.form-card fieldset:not(.listing-type) {
+  border: 0;
+  margin: 20px 0 0;
+  padding: 0;
+}
+
+.detail-list legend {
+  display: block;
+}
+
+.repeatable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.repeatable-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.repeatable-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.remove-item {
+  align-items: center;
+  background: #f9ece6;
+  border-radius: 50%;
+  color: #c9683b;
+  display: flex;
+  flex: 0 0 27px;
+  font-size: 18px;
+  height: 27px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.add-item {
+  background: transparent;
+  color: #e2743e;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 9px;
+  padding: 0;
+}
+
+.cover-photo-field,
+.room-photo-field {
+  gap: 8px;
+  margin-top: 17px;
+}
+
+.photo-field-label {
+  color: #174b35;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.photo-dropzone {
+  align-items: center;
+  background: linear-gradient(135deg, #fbfdf9, #f2f8f0);
+  border: 1.5px dashed #cdbf8c;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-height: 190px;
+  padding: 25px;
+  text-align: center;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+}
+
+.photo-dropzone:hover,
+.photo-dropzone:focus-within {
+  border-color: #e2743e;
+  box-shadow: 0 8px 18px rgba(23, 75, 53, .08);
+  transform: translateY(-1px);
+}
+
+.photo-dropzone input {
+  display: none;
+}
+
+.photo-dropzone ion-icon {
+  color: #4b9b61;
+  font-size: 38px;
+}
+
+.photo-dropzone strong {
+  color: #174b35;
+  font-size: 12px;
+}
+
+.photo-upload-hint {
+  color: #a4afa8;
+  font-size: 9px;
+}
+
+.photo-dropzone small {
+  color: #e2743e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.upload-area {
+  align-items: center;
+  background: linear-gradient(135deg, #fbfdf9, #f1f8f0);
+  border: 1.5px dashed #8fbd96;
+  border-radius: 11px;
+  cursor: pointer;
+  justify-content: center;
+  min-height: 190px;
+  padding: 25px;
+  text-align: center;
+  transition: border-color .2s, box-shadow .2s, transform .2s;
+}
+
+.upload-area:hover,
+.upload-area:focus-within {
+  border-color: #e2743e;
+  box-shadow: 0 8px 18px rgba(23, 75, 53, .08);
+  transform: translateY(-1px);
+}
+
+.upload-area input {
+  display: none;
+}
+
+.upload-area ion-icon {
+  color: #4b9b61;
+  font-size: 34px;
+}
+
+.upload-area strong {
+  color: #174b35;
+  font-size: 12px;
+}
+
+.upload-area span,
+.upload-area small {
+  color: #89968d;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.upload-area small {
+  color: #e2743e;
+  font-weight: 700;
+}
+
+.form-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.back-form-button {
+  background: #f3f6f1;
+  border-radius: 7px;
+  color: #587065;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 13px 17px;
+}
+
+.submit-button {
+  align-items: center;
+  background: #e2743e;
+  border-radius: 7px;
+  color: #fff;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 7px;
+  padding: 13px 17px;
+}
+
+.success-card {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  margin-top: 40px;
+}
+
+.success-icon {
+  align-items: center;
+  background: #e5f1e4;
+  border-radius: 50%;
+  color: #4b9b61;
+  display: flex;
+  flex: 0 0 45px;
+  font-size: 24px;
+  height: 45px;
+  justify-content: center;
+  width: 45px;
+}
+
+.success-card h2 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 25px;
+  margin: 7px 0 5px;
+}
+
+.success-card p {
+  color: #819087;
+  font-size: 11px;
+  margin: 0;
+}
+
+.success-card a {
+  align-items: center;
+  color: #e2743e;
+  display: flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 5px;
+  margin-left: auto;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .host-header {
+    height: 70px;
+    padding: 0 18px;
+  }
+
+  .host-nav {
+    display: none;
+  }
+
+  .host-name,
+  .host-account button {
+    display: none;
+  }
+
+  .host-shell {
+    padding: 38px 18px 55px;
+  }
+
+  .page-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .form-card {
+    padding: 19px 16px;
+  }
+
+  .form-actions {
+    align-items: stretch;
+  }
+
+  .submit-button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .success-card {
+    align-items: start;
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+
+  .success-card a {
+    margin-left: 63px;
+  }
+}
 </style>
