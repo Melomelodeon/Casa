@@ -2,6 +2,7 @@ export type Listing = {
   id: number;
   name: string;
   location: string;
+  dateAdded?: string | null;
   price: number;
   rating: string;
   type: string;
