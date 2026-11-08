@@ -70,9 +70,10 @@
           <a href="/signup?role=landlord">Become a Casa host <ion-icon :icon="arrowForwardOutline" /></a>
         </section>
       </main>
-      <div v-if="selectedListing" class="listing-backdrop" @click.self="selectedListing = null">
+      <div v-if="previewError" class="preview-error" role="alert">{{ previewError }}</div>
+      <div v-if="selectedListing" class="listing-backdrop" @click.self="closeListing">
         <section ref="selectedListingElement" class="selected-listing" role="dialog" aria-modal="true" aria-labelledby="selected-listing-title" @scroll="dismissScrollIndicator">
-          <button class="selected-close" type="button" aria-label="Close listing details" @click="selectedListing = null">×</button>
+          <button class="selected-close" type="button" aria-label="Close listing details" @click="closeListing">×</button>
           <div v-if="hasScrollableContent" class="scroll-indicator" :class="{ 'is-hidden': scrollIndicatorDismissed }" aria-hidden="true">
             <span class="scroll-chevron" />
           </div>
@@ -82,6 +83,7 @@
             </span>
           </div>
           <div class="selected-listing-body">
+            <p v-if="previewMode" class="host-preview-note">Host preview · {{ previewStatus === 'draft' ? 'This draft is not visible to renters.' : 'This is how renters see your published listing.' }}</p>
             <div class="selected-listing-heading">
               <div>
                 <span class="eyebrow">{{ selectedListing.type }}</span>
@@ -91,10 +93,11 @@
               <span class="selected-rating"><ion-icon :icon="star" /> {{ selectedListing.rating }}</span>
             </div>
             <p class="selected-description">{{ selectedListing.description }}</p>
-            <BookingPanel :listing="selectedListing" :floors="selectedFloors" @book="startBooking" />
+            <BookingPanel :listing="selectedListing" :floors="selectedFloors" :read-only="previewMode" @book="startBooking" />
             <div class="selected-listing-footer">
               <strong>₱{{ selectedListing.price.toLocaleString() }}<small> / month</small></strong>
-              <a href="/listings">Back to listings <ion-icon :icon="arrowForwardOutline" /></a>
+              <a v-if="previewMode" href="/host/spaces">Back to My Spaces <ion-icon :icon="arrowForwardOutline" /></a>
+              <a v-else href="/listings">Back to listings <ion-icon :icon="arrowForwardOutline" /></a>
             </div>
           </div>
         </section>
@@ -105,13 +108,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import BookingPanel from '../components/BookingPanel.vue';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
 import { usePublishedListings } from '../composables/usePublishedListings';
-import { defaultListingImage, getBookingFloors, isListingFullyBooked, type BookingSelection, type Listing } from '../data/listings';
+import { defaultListingImage, getBookingFloors, isListingFullyBooked, mapDatabaseSpaces, type BookingSelection, type Listing } from '../data/listings';
+import { getSupabaseClient } from '../lib/supabase';
 import { arrowForwardOutline, heart, heartOutline, locationOutline, lockClosedOutline, mapOutline, optionsOutline, personOutline, searchOutline, star, sparklesOutline } from 'ionicons/icons';
 
 const searchTerm = ref('');
@@ -125,13 +129,45 @@ const selectedListing = ref<Listing | null>(null);
 const selectedListingElement = ref<HTMLElement | null>(null);
 const hasScrollableContent = ref(false);
 const scrollIndicatorDismissed = ref(false);
+const previewError = ref('');
+const previewStatus = ref('');
 let selectedListingResizeObserver: ResizeObserver | null = null;
 const router = useRouter();
+const route = useRoute();
+const previewMode = computed(() => Boolean(route.query.preview));
 const { user } = useAuthUser();
 const { logout } = useLogout();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
-onIonViewWillEnter(() => { void loadListings(); });
+onIonViewWillEnter(() => { void loadPage(); });
+async function loadPage() {
+  await loadListings();
+  const previewId = Number(route.query.preview);
+  if (!Number.isSafeInteger(previewId) || previewId <= 0) return;
+  previewError.value = '';
+  try {
+    const client = getSupabaseClient();
+    const [{ data, error: listingError }, { data: bookedSpaces, error: bookingError }] = await Promise.all([
+      client.from('spaces').select(`
+        id, name, location, type, description, monthly_rent, cover_photo_url, latitude, longitude, created_at, status,
+        floors(id, name, photo_url, rooms(
+          id, name, photo_url, monthly_rent, amenities, house_rules, maintenance, grid_rows, grid_columns,
+          door_row, door_column, bedspaces(id, name, price, row, column_index, photo_url, amenities, house_rules, maintenance)
+        ))
+      `).eq('id', previewId).single(),
+      client.rpc('get_booked_listing_spaces'),
+    ]);
+    if (listingError) throw listingError;
+    if (bookingError) throw bookingError;
+    if (!data) throw new Error('This listing could not be found or you do not have permission to preview it.');
+    const [listing] = mapDatabaseSpaces([data], bookedSpaces ?? []);
+    if (!listing) throw new Error('This listing does not have any previewable details.');
+    previewStatus.value = data.status;
+    selectedListing.value = listing;
+  } catch (error) {
+    previewError.value = error instanceof Error ? error.message : 'Unable to preview this listing.';
+  }
+}
 function getListingTag(listing: Listing) {
   if (isListingFullyBooked(listing)) {
     return { label: 'Fully booked', variant: 'fully-booked-tag', icon: lockClosedOutline };
@@ -211,6 +247,14 @@ function toggleFavorite(id: number) {
 function openListing(listing: Listing) {
   selectedListing.value = listing;
 }
+function closeListing() {
+  if (previewMode.value) {
+    void router.replace({ name: 'HostSpaces', query: { spaceId: String(route.query.preview) } });
+    selectedListing.value = null;
+    return;
+  }
+  selectedListing.value = null;
+}
 function startBooking(selection: BookingSelection) {
   if (!selectedListing.value) return;
   void router.push({
@@ -289,6 +333,8 @@ function clearFilters() {
 .selected-listing-image { background-position: center; background-size: cover; height: 170px; position: relative; }
 .selected-label { align-items: center; background: #174b35; border-radius: 4px; color: #fff; display: inline-flex; font-size: 9px; font-weight: 700; gap: 5px; left: 13px; letter-spacing: .6px; padding: 7px 9px; position: absolute; top: 13px; }.selected-label ion-icon { font-size: 12px; }.selected-label.budget-tag { background: #e2743e; }.selected-label.rating-tag { background: rgba(23,75,53,.9); }.selected-label.fully-booked-tag { background: #7541a5; }.badge { background: #fbfaf7; color: #174b35; }
 .selected-listing-body { padding: 17px 17px 38px; }
+.host-preview-note { background: #eef6ee; border-radius: 6px; color: #35744a; font-size: 10px; font-weight: 600; margin: 0 0 13px; padding: 9px 11px; }
+.preview-error { background: #fff0e8; border: 1px solid #f1c7a8; border-radius: 7px; color: #a4472a; font-size: 12px; margin: 18px auto; max-width: 700px; padding: 12px 16px; }
 .selected-listing-heading { align-items: start; display: flex; justify-content: space-between; }
 .selected-listing-heading h2 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 24px; margin: 6px 0 4px; }
 .selected-listing-heading p, .selected-description { color: #829088; font-size: 10px; margin: 0; }

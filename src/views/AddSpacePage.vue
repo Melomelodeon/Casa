@@ -13,19 +13,21 @@
       <main class="host-shell">
         <a class="back-link" href="/host/spaces">← Back to my spaces</a>
         <div class="page-heading">
-          <div><span class="eyebrow">CREATE A LISTING</span>
-            <h1>Add a space.</h1>
+          <div><span class="eyebrow">{{ isEditMode ? 'EDIT YOUR LISTING' : 'CREATE A LISTING' }}</span>
+            <h1>{{ isEditMode ? 'Edit your space.' : 'Add a space.' }}</h1>
             <p>Share the details that help residents picture themselves at home.</p>
           </div><span class="step-label">STEP {{ submitted ? totalSteps : currentStep }} OF {{ totalSteps }}</span>
         </div>
         <div v-if="submitted" class="success-card" role="status"><span class="success-icon"><ion-icon
               :icon="checkmarkOutline" /></span>
-          <div><span class="eyebrow">LISTING PUBLISHED</span>
-            <h2>Your listing has been published.</h2>
-            <p>Residents can now discover and book your space.</p>
+          <div><span class="eyebrow">{{ isEditMode ? 'CHANGES SAVED' : 'LISTING PUBLISHED' }}</span>
+            <h2>{{ isEditMode ? 'Your listing has been updated.' : 'Your listing has been published.' }}</h2>
+            <p>{{ isEditMode ? 'Your listing details and space layout are up to date.' : 'Residents can now discover and book your space.' }}</p>
           </div><a href="/host/spaces">View my spaces <ion-icon :icon="arrowForwardOutline" /></a>
         </div>
+        <p v-else-if="isLoadingListing" class="form-status" role="status">Loading listing details…</p>
         <form v-else ref="formElement" class="listing-form" novalidate @submit.prevent="goToNextStep">
+          <p v-if="editLoadError" class="submit-error" role="alert">{{ editLoadError }}</p>
           <section v-if="currentStep === 1" class="form-card">
             <div class="section-heading"><span class="section-number">01</span>
               <div>
@@ -33,9 +35,9 @@
                 <p>Start with the basics residents need to know.</p>
               </div>
             </div>
-            <div class="field-grid"><label>Space name<input v-model.trim="form.name" required type="text"
+            <div class="field-grid"><label>Space name<input v-model="form.name" required type="text" @blur="form.name = formatTextField(form.name, true)"
                   placeholder="e.g. Sage House" /></label><label>City or area<input v-model.trim="form.location"
-                  required type="text" placeholder="Choose a point on the map" /></label></div>
+                  required type="text" placeholder="Choose a point on the map" @blur="form.location = formatTextField(form.location, true)" /></label></div>
             <div class="location-picker">
               <div class="location-picker-heading">
                 <div><strong>Pin your space on the map</strong><p>Click the map to set the location and fill in the city or area.</p></div>
@@ -51,14 +53,15 @@
             <fieldset class="listing-type">
               <legend>What are you listing?</legend>
               <div class="type-options"><label v-for="type in ['Bedspace', 'Private room']" :key="type"
-                  class="type-option"><input v-model="form.type" name="listing-type" type="radio" :value="type" />
+                  class="type-option"><input name="listing-type" type="radio" :value="type" :checked="form.type === type"
+                    @change="requestListingTypeChange(type)" />
                   <span>{{ type }}</span></label></div>
-            </fieldset><label>Description<textarea v-model.trim="form.description" required rows="4"
+            </fieldset><label>Description<textarea v-model="form.description" required rows="4" @blur="form.description = formatTextField(form.description)"
                 placeholder="Describe what makes this space special..." /></label><label class="cover-photo-field"><span
                 class="photo-field-label">Cover photo</span><span class="photo-dropzone"><input type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif" @change="handleCoverPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+                  accept="image/png,image/jpeg,image/webp,image/gif" @change="handleCoverPhoto" /><img v-if="coverPhotoPreview || existingListing?.coverPhotoUrl" class="photo-preview" :src="coverPhotoPreview || existingListing?.coverPhotoUrl || ''" alt="Cover photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                     coverPhotoName || 'Drop cover photo here or browse' }}</strong><span class="photo-upload-hint">PNG or
-                  JPG · 1 photo</span><small>{{ coverPhotoName ? 'Cover photo selected' : 'Choose cover photo'
+                      JPG · 1 photo</span><small>{{ coverPhoto ? 'Cover photo selected' : coverPhotoName ? 'Current photo will be kept' : 'Choose cover photo'
                   }}</small></span></label>
           </section>
           <section v-if="currentStep === 2" class="form-card">
@@ -68,11 +71,18 @@
                 <p>Give residents a clear idea of where the space is located.</p>
               </div>
             </div>
-            <label>Floor name<input v-model.trim="form.floorName" type="text" placeholder="e.g. Ground floor" /></label>
+            <div class="floor-selector" aria-label="Listing floors">
+              <button v-for="(floor, index) in floorDrafts" :key="floor.key" type="button"
+                :class="{ active: index === activeFloorIndex }" @click="selectFloor(index)">
+                {{ floor.name || `Floor ${index + 1}` }}
+              </button>
+              <button type="button" class="add-floor-button" @click="addFloor"><ion-icon :icon="addOutline" /> Add another floor</button>
+            </div>
+            <label>Floor name<input v-model="activeFloor.name" type="text" placeholder="e.g. Ground floor" @blur="activeFloor.name = formatTextField(activeFloor.name, true)" /></label>
             <label class="floor-photo-field"><span class="photo-field-label">Floor photo</span><span class="photo-dropzone"><input type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleFloorPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleFloorPhoto" /><img v-if="floorPhotoPreview || activeFloor.floorPhotoUrl" class="photo-preview" :src="floorPhotoPreview || activeFloor.floorPhotoUrl || ''" alt="Floor photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                 floorPhotoName || 'Drop floor photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
-                floorPhotoName ? 'Floor photo selected' : 'Choose floor photo' }}</small></span></label>
+                floorPhoto ? 'Floor photo selected' : floorPhotoName ? 'Current photo will be kept' : 'Choose floor photo' }}</small></span></label>
           </section>
           <section v-if="currentStep === 3" class="form-card">
             <div class="section-heading"><span class="section-number">03</span>
@@ -81,22 +91,34 @@
                 <p>Add the room name and a photo residents can use to identify it.</p>
               </div>
             </div>
-            <label>Room name<input v-model.trim="form.roomName" type="text"
-              placeholder="e.g. Sunrise Room" /></label>
+            <div class="floor-selector" aria-label="Listing floors">
+              <button v-for="(floor, index) in floorDrafts" :key="floor.key" type="button"
+                :class="{ active: index === activeFloorIndex }" @click="selectFloor(index)">
+                {{ floor.name || `Floor ${index + 1}` }}
+              </button>
+            </div>
+            <div class="room-selector" aria-label="Rooms on selected floor">
+              <button v-for="(room, index) in activeFloor.rooms" :key="room.key" type="button"
+                :class="{ active: index === activeRoomIndex }" @click="selectRoom(index)">
+                {{ room.name || `Room ${index + 1}` }}
+              </button>
+              <button type="button" class="add-floor-button" @click="addRoom"><ion-icon :icon="addOutline" /> Add room</button>
+            </div>
+            <label>Room name<input v-model="activeRoom.name" type="text"
+              placeholder="e.g. Sunrise Room" @blur="activeRoom.name = formatTextField(activeRoom.name, true)" /></label>
             <label class="room-photo-field"><span class="photo-field-label">Room photo</span><span class="photo-dropzone"><input type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleRoomPhoto" /><ion-icon :icon="cloudUploadOutline" /><strong>{{
+              accept="image/png,image/jpeg,image/webp,image/gif" @change="handleRoomPhoto" /><img v-if="roomPhotoPreview || activeRoom.roomPhotoUrl" class="photo-preview" :src="roomPhotoPreview || activeRoom.roomPhotoUrl || ''" alt="Room photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                 roomPhotoName || 'Drop room photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
-                roomPhotoName ? 'Room photo selected' : 'Choose room photo' }}</small></span></label>
+                roomPhoto ? 'Room photo selected' : roomPhotoName ? 'Current photo will be kept' : 'Choose room photo' }}</small></span></label>
             <template v-if="form.type === 'Private room'">
               <div class="field-grid private-room-space-details">
-                <label>Space name<input v-model.trim="privateRoomSpace.name" type="text" placeholder="e.g. Sunrise Space" /></label>
-                <label>Monthly rent<input v-model.number="privateRoomSpace.price" min="1" required type="number" placeholder="8500" /></label>
+                <label>Monthly rent<input v-model="privateRoomRentText" required type="text" inputmode="decimal" placeholder="8,500" @input="updateRentInput($event, 'private-room')" @focus="privateRoomRentText = String(privateRoomSpace.price || '')" @blur="formatRentInput($event, 'private-room')" /></label>
               </div>
               <fieldset class="detail-list">
                 <legend>Amenities included</legend>
                 <div class="repeatable-list">
                   <div v-for="(_, index) in privateRoomSpace.amenities" :key="`private-amenity-${index}`" class="repeatable-row">
-                    <input v-model.trim="privateRoomSpace.amenities[index]" type="text" placeholder="e.g. Wi-Fi" :aria-label="`Amenity ${index + 1}`" />
+                    <input v-model="privateRoomSpace.amenities[index]" type="text" placeholder="e.g. Wi-Fi" :aria-label="`Amenity ${index + 1}`" @blur="privateRoomSpace.amenities[index] = formatTextField(privateRoomSpace.amenities[index])" />
                     <button v-if="privateRoomSpace.amenities.length > 1" type="button" class="remove-item" :aria-label="`Remove amenity ${index + 1}`" @click="removeItem(privateRoomSpace.amenities, index)">×</button>
                   </div>
                 </div>
@@ -106,7 +128,7 @@
                 <legend>House rules</legend>
                 <div class="repeatable-list">
                   <div v-for="(_, index) in privateRoomSpace.houseRules" :key="`private-rule-${index}`" class="repeatable-row">
-                    <input v-model.trim="privateRoomSpace.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM" :aria-label="`House rule ${index + 1}`" />
+                    <input v-model="privateRoomSpace.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM" :aria-label="`House rule ${index + 1}`" @blur="privateRoomSpace.houseRules[index] = formatTextField(privateRoomSpace.houseRules[index])" />
                     <button v-if="privateRoomSpace.houseRules.length > 1" type="button" class="remove-item" :aria-label="`Remove house rule ${index + 1}`" @click="removeItem(privateRoomSpace.houseRules, index)">×</button>
                   </div>
                 </div>
@@ -116,7 +138,7 @@
                 <legend>Maintenance history</legend>
                 <div class="repeatable-list">
                   <div v-for="(_, index) in privateRoomSpace.maintenance" :key="`private-maintenance-${index}`" class="repeatable-row">
-                    <input v-model.trim="privateRoomSpace.maintenance[index]" type="text" placeholder="e.g. Room deep-cleaned and sanitized" :aria-label="`Maintenance entry ${index + 1}`" />
+                    <input v-model="privateRoomSpace.maintenance[index]" type="text" placeholder="e.g. Room deep-cleaned and sanitized" :aria-label="`Maintenance entry ${index + 1}`" @blur="privateRoomSpace.maintenance[index] = formatTextField(privateRoomSpace.maintenance[index])" />
                     <button v-if="privateRoomSpace.maintenance.length > 1" type="button" class="remove-item" :aria-label="`Remove maintenance entry ${index + 1}`" @click="removeItem(privateRoomSpace.maintenance, index)">×</button>
                   </div>
                 </div>
@@ -128,8 +150,21 @@
             <div class="section-heading"><span class="section-number">04</span>
               <div>
                 <h2>Room layout</h2>
-                <p>Set the room grid, then select a cell to add a bedspace.</p>
+                <p>Set the room grid, then select a cell to add or update a bedspace.</p>
               </div>
+            </div>
+            <div class="floor-selector" aria-label="Listing floors">
+              <button v-for="(floor, index) in floorDrafts" :key="floor.key" type="button"
+                :class="{ active: index === activeFloorIndex }" @click="selectFloor(index)">
+                {{ floor.name || `Floor ${index + 1}` }}
+              </button>
+            </div>
+            <div class="room-selector" aria-label="Rooms on selected floor">
+              <button v-for="(room, index) in activeFloor.rooms" :key="room.key" type="button"
+                :class="{ active: index === activeRoomIndex }" @click="selectRoom(index)">
+                {{ room.name || `Room ${index + 1}` }}
+              </button>
+              <button type="button" class="add-floor-button" @click="addRoom"><ion-icon :icon="addOutline" /> Add room</button>
             </div>
             <div class="field-grid grid-size-fields">
               <label>Grid rows<input v-model.number="gridRows" type="number" min="1" step="1" /></label>
@@ -144,19 +179,20 @@
             </div>
             <div class="grid-preview-wrap">
               <div class="host-bed-grid" :style="{ '--layout-rows': normalizedRows, '--layout-columns': normalizedColumns }">
-                <button v-for="cell in layoutCells" :key="cell.id" type="button" class="host-grid-cell"
+                <div v-for="cell in layoutCells" :key="cell.id" class="host-grid-cell" role="button" tabindex="0"
                   :class="{ 'has-bedspaces': cell.bedspaces.length, 'has-door': cell.isDoor, 'door-placement-target': isPlacingDoor }"
                   :aria-label="`Row ${cell.row}, column ${cell.column}${cell.isDoor ? ', door' : ''}${cell.bedspaces.length ? `, ${cell.bedspaces.length} bedspaces` : ', empty'}`"
-                  @click="selectGridCell(cell.row, cell.column)">
+                  @click="selectGridCell(cell.row, cell.column)" @keydown.enter="selectGridCell(cell.row, cell.column)">
                   <span v-if="cell.isDoor" class="host-door-marker" aria-label="Door position"><ion-icon :icon="enterOutline" /><small>Door</small></span>
-                  <span v-if="cell.bedspaces.length" class="cell-bedspaces">
+                  <TransitionGroup v-if="cell.bedspaces.length" name="bed-item" tag="span" class="cell-bedspaces">
                     <span v-for="space in cell.bedspaces" :key="space.id" class="cell-bedspace">
                       <ion-icon :icon="bedOutline" /><span>{{ space.name || 'Bedspace' }}</span>
+                      <button type="button" class="edit-bedspace-button" :aria-label="`Edit ${space.name || 'bedspace'}`" @click.stop="editBedspace(space)" @keydown.enter.stop>Edit</button>
                     </span>
-                  </span>
+                  </TransitionGroup>
                   <span v-else class="empty-cell"><ion-icon :icon="addOutline" /><small>Add bedspace</small></span>
                   <small class="cell-position">{{ cell.row }}, {{ cell.column }}</small>
-                </button>
+                </div>
               </div>
               <p class="bunk-tip"><ion-icon :icon="informationCircleOutline" /> Add another bedspace to the same grid cell to create a bunk bed.</p>
             </div>
@@ -165,9 +201,25 @@
           <div class="form-actions"><button v-if="currentStep > 1" class="back-form-button" type="button"
               @click="currentStep--">Back</button><button v-if="currentStep < totalSteps" class="submit-button" type="button"
               @click="goToNextStep">Continue <ion-icon :icon="arrowForwardOutline" /></button><button v-else
-              class="submit-button" type="button" :disabled="form.type === 'Bedspace' && roomSpaces.length === 0" @click="openConfirmation">Publish listing <ion-icon :icon="arrowForwardOutline" /></button></div>
-          <p v-if="form.type === 'Bedspace' && currentStep === totalSteps && roomSpaces.length === 0" class="publish-hint">Add at least one bedspace before publishing.</p>
+              class="submit-button" type="button" :disabled="!allFloorsReady" @click="openConfirmation">{{ isEditMode ? 'Save changes' : 'Publish listing' }} <ion-icon :icon="arrowForwardOutline" /></button></div>
+          <p v-if="currentStep === totalSteps && !allFloorsReady" class="publish-hint">
+            {{ form.type === 'Bedspace' ? 'Add at least one correctly priced bedspace to every room before publishing.' : 'Enter a monthly rent for every room before publishing.' }}
+          </p>
         </form>
+        <Transition name="dialog">
+        <div v-if="showTypeSwitchConfirmation" class="dialog-backdrop type-switch-backdrop" role="presentation" @click.self="cancelTypeSwitch">
+          <section class="confirmation-dialog type-switch-dialog" role="alertdialog" aria-modal="true" aria-labelledby="type-switch-title">
+            <span class="dialog-icon warning-icon"><ion-icon :icon="informationCircleOutline" /></span>
+            <h2 id="type-switch-title">Switch listing type?</h2>
+            <p>Switching from {{ form.type }} to {{ pendingListingType }} will reset this listing’s room and bed layout. Existing bookings for those spaces will be permanently deleted when you save. You can create new bookable spaces before saving.</p>
+            <div class="dialog-actions">
+              <button type="button" class="back-form-button" @click="cancelTypeSwitch">Keep current type</button>
+              <button type="button" class="submit-button destructive-confirm" @click="confirmTypeSwitch">Reset and switch</button>
+            </div>
+          </section>
+        </div>
+        </Transition>
+        <Transition name="dialog">
         <div v-if="showAddBedspaceConfirmation" class="dialog-backdrop" role="presentation" @click.self="cancelAddBedspace">
           <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="add-bedspace-title">
             <span class="dialog-icon"><ion-icon :icon="bedOutline" /></span>
@@ -179,27 +231,29 @@
             </div>
           </section>
         </div>
+        </Transition>
+        <Transition name="dialog">
         <div v-if="showBedspaceForm" class="dialog-backdrop bedspace-dialog-backdrop" role="presentation" @click.self="cancelBedspaceForm">
           <section class="bedspace-dialog" role="dialog" aria-modal="true" aria-labelledby="bedspace-dialog-title">
             <div class="section-heading"><span class="section-number">05</span><div>
               <h2 id="bedspace-dialog-title">Bedspace details</h2>
-              <p>For grid cell {{ selectedCell?.row }}, {{ selectedCell?.column }}</p>
+              <p>{{ editingBedspaceId === null ? 'For' : 'Editing' }} grid cell {{ selectedCell?.row }}, {{ selectedCell?.column }}</p>
             </div></div>
             <div class="field-grid">
-              <label>Bedspace name<input v-model.trim="bedspaceDraft.name" type="text" placeholder="e.g. Bed A" /></label>
-              <label>Monthly rent<input v-model.number="bedspaceDraft.price" min="1" required type="number" placeholder="8500" /></label>
+              <label>Bedspace name<input v-model="bedspaceDraft.name" type="text" placeholder="e.g. Bed A" @blur="bedspaceDraft.name = formatTextField(bedspaceDraft.name, true)" /></label>
+              <label>Monthly rent<input v-model="bedspaceRentText" required type="text" inputmode="decimal" placeholder="8,500" @input="updateRentInput($event, 'bedspace')" @focus="bedspaceRentText = String(bedspaceDraft.price || '')" @blur="formatRentInput($event, 'bedspace')" /></label>
             </div>
             <label class="bedspace-photo-field"><span class="photo-field-label">Bedspace photo</span><span class="photo-dropzone bedspace-photo-dropzone">
               <input type="file"               accept="image/png,image/jpeg,image/webp,image/gif" @change="handleBedspacePhoto" />
-              <ion-icon :icon="cloudUploadOutline" /><strong>{{ bedspaceDraft.image?.name || 'Drop bedspace photo here or browse' }}</strong>
+              <img v-if="bedspacePhotoPreview || bedspaceDraft.photoUrl" class="photo-preview" :src="bedspacePhotoPreview || bedspaceDraft.photoUrl || ''" alt="Bedspace photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{ bedspaceDraft.image?.name || (bedspaceDraft.photoUrl ? 'Current photo saved' : 'Drop bedspace photo here or browse') }}</strong>
               <span class="photo-upload-hint">PNG or JPG · 1 photo</span>
-              <small>{{ bedspaceDraft.image ? 'Bedspace photo selected' : 'Choose bedspace photo' }}</small>
+              <small>{{ bedspaceDraft.image ? 'Bedspace photo selected' : bedspaceDraft.photoUrl ? 'Current photo will be kept' : 'Choose bedspace photo' }}</small>
             </span></label>
             <fieldset class="detail-list">
               <legend>Amenities included</legend>
               <div class="repeatable-list">
                 <div v-for="(_, index) in bedspaceDraft.amenities" :key="`amenity-${index}`" class="repeatable-row">
-                  <input v-model.trim="bedspaceDraft.amenities[index]" type="text" placeholder="e.g. Wi-Fi" :aria-label="`Amenity ${index + 1}`" />
+                  <input v-model="bedspaceDraft.amenities[index]" type="text" placeholder="e.g. Wi-Fi" :aria-label="`Amenity ${index + 1}`" @blur="bedspaceDraft.amenities[index] = formatTextField(bedspaceDraft.amenities[index])" />
                   <button v-if="bedspaceDraft.amenities.length > 1" type="button" class="remove-item" :aria-label="`Remove amenity ${index + 1}`" @click="removeItem(bedspaceDraft.amenities, index)">×</button>
                 </div>
               </div>
@@ -209,7 +263,7 @@
               <legend>House rules</legend>
               <div class="repeatable-list">
                 <div v-for="(_, index) in bedspaceDraft.houseRules" :key="`rule-${index}`" class="repeatable-row">
-                  <input v-model.trim="bedspaceDraft.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM" :aria-label="`House rule ${index + 1}`" />
+                  <input v-model="bedspaceDraft.houseRules[index]" type="text" placeholder="e.g. Quiet hours after 10 PM" :aria-label="`House rule ${index + 1}`" @blur="bedspaceDraft.houseRules[index] = formatTextField(bedspaceDraft.houseRules[index])" />
                   <button v-if="bedspaceDraft.houseRules.length > 1" type="button" class="remove-item" :aria-label="`Remove house rule ${index + 1}`" @click="removeItem(bedspaceDraft.houseRules, index)">×</button>
                 </div>
               </div>
@@ -219,7 +273,7 @@
               <legend>Maintenance history</legend>
               <div class="repeatable-list">
                 <div v-for="(_, index) in bedspaceDraft.maintenance" :key="`maintenance-${index}`" class="repeatable-row">
-                  <input v-model.trim="bedspaceDraft.maintenance[index]" type="text" placeholder="e.g. Bed frame checked and tightened" :aria-label="`Maintenance entry ${index + 1}`" />
+                  <input v-model="bedspaceDraft.maintenance[index]" type="text" placeholder="e.g. Bed frame checked and tightened" :aria-label="`Maintenance entry ${index + 1}`" @blur="bedspaceDraft.maintenance[index] = formatTextField(bedspaceDraft.maintenance[index])" />
                   <button v-if="bedspaceDraft.maintenance.length > 1" type="button" class="remove-item" :aria-label="`Remove maintenance entry ${index + 1}`" @click="removeItem(bedspaceDraft.maintenance, index)">×</button>
                 </div>
               </div>
@@ -227,23 +281,26 @@
             </fieldset>
             <div class="dialog-actions">
               <button type="button" class="back-form-button" @click="cancelBedspaceForm">Cancel</button>
-              <button type="button" class="submit-button" @click="createBedspace">Add bedspace</button>
+              <button type="button" class="submit-button" @click="createBedspace">{{ editingBedspaceId === null ? 'Add bedspace' : 'Save bedspace' }}</button>
             </div>
             <p v-if="bedspaceError" class="submit-error" role="alert">{{ bedspaceError }}</p>
           </section>
         </div>
+        </Transition>
+        <Transition name="dialog">
         <div v-if="showConfirmation" class="dialog-backdrop" role="presentation" @click.self="closeConfirmation">
           <section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="publish-dialog-title">
             <span class="dialog-icon"><ion-icon :icon="checkmarkOutline" /></span>
-            <h2 id="publish-dialog-title">Publish this listing?</h2>
-            <p>Once published, residents will be able to view your listing and request to book it.</p>
+            <h2 id="publish-dialog-title">{{ isEditMode ? 'Save listing changes?' : 'Publish this listing?' }}</h2>
+            <p>{{ isEditMode ? 'Your existing listing will be updated with these details.' : 'Once published, residents will be able to view your listing and request to book it.' }}</p>
             <p v-if="submitError" class="submit-error" role="alert">{{ submitError }}</p>
             <div class="dialog-actions">
               <button type="button" class="back-form-button" :disabled="isSubmitting" @click="closeConfirmation">Cancel</button>
-              <button type="button" class="submit-button" :disabled="isSubmitting" @click="confirmPublish">{{ isSubmitting ? 'Publishing…' : 'Publish listing' }}</button>
+              <button type="button" class="submit-button" :disabled="isSubmitting" @click="confirmPublish">{{ isSubmitting ? (isEditMode ? 'Saving…' : 'Publishing…') : (isEditMode ? 'Save changes' : 'Publish listing') }}</button>
             </div>
           </section>
         </div>
+        </Transition>
       </main>
     </ion-content>
   </ion-page>
@@ -252,6 +309,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import { useRoute } from 'vue-router';
 import L, { type Map as LeafletMap, type Marker } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { addOutline, arrowForwardOutline, bedOutline, checkmarkOutline, cloudUploadOutline, enterOutline, informationCircleOutline } from 'ionicons/icons';
@@ -261,9 +319,13 @@ import { getSupabaseClient } from '../lib/supabase';
 
 const { logout } = useLogout();
 const { user } = useAuthUser();
+const route = useRoute();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
 const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
-const form = reactive({ name: '', location: '', type: 'Bedspace', description: '', floorName: '', roomName: '' });
+const requestedEditId = Number(route.query.edit);
+const isEditMode = Number.isSafeInteger(requestedEditId) && requestedEditId > 0;
+const editSpaceId = isEditMode ? requestedEditId : null;
+const form = reactive({ name: '', location: '', type: 'Bedspace', description: '' });
 const locationCoordinates = ref<{ latitude: number; longitude: number } | null>(null);
 const locationMapElement = ref<HTMLDivElement | null>(null);
 const locationStatus = ref('Loading map…');
@@ -275,31 +337,132 @@ let reverseGeocodeController: AbortController | null = null;
 let reverseGeocodeTimer: ReturnType<typeof setTimeout> | undefined;
 let hasSelectedLocation = false;
 const totalSteps = computed(() => form.type === 'Private room' ? 3 : 4);
-const privateRoomSpace = reactive({ name: '', price: 0, amenities: [''], houseRules: [''], maintenance: [''] });
-const bedspaceDraft = reactive({ name: '', price: 0, image: null as File | null, amenities: [''], houseRules: [''], maintenance: [''] });
+const bedspaceDraft = reactive({ name: '', price: 0, image: null as File | null, photoUrl: null as string | null, amenities: [''], houseRules: [''], maintenance: [''] });
+const privateRoomRentText = ref('');
+const bedspaceRentText = ref('');
+type BedspaceDraft = { id: number; row: number; column: number; name: string; price: number; image: File | null; photoUrl?: string | null; amenities: string[]; houseRules: string[]; maintenance: string[] };
+type RoomDraft = {
+  key: number;
+  name: string;
+  roomPhoto: File | null;
+  roomPhotoUrl: string | null;
+  roomPhotoName: string;
+  privateRoomSpace: { price: number; amenities: string[]; houseRules: string[]; maintenance: string[] };
+  bedspaces: BedspaceDraft[];
+  gridRows: number;
+  gridColumns: number;
+  doorPosition: { row: number; column: number } | null;
+  roomId?: number;
+  bedspaceIds: number[];
+};
+type FloorDraft = {
+  key: number;
+  name: string;
+  floorPhoto: File | null;
+  floorPhotoUrl: string | null;
+  floorPhotoName: string;
+  floorId?: number;
+  rooms: RoomDraft[];
+};
+function createRoomDraft(key = Date.now()): RoomDraft {
+  return {
+    key,
+    name: '',
+    roomPhoto: null,
+    roomPhotoUrl: null,
+    roomPhotoName: '',
+    privateRoomSpace: { price: 0, amenities: [''], houseRules: [''], maintenance: [''] },
+    bedspaces: [],
+    gridRows: 3,
+    gridColumns: 4,
+    doorPosition: null,
+    bedspaceIds: [],
+  };
+}
+function createFloorDraft(key = Date.now()): FloorDraft {
+  return {
+    key,
+    name: '',
+    floorPhoto: null,
+    floorPhotoUrl: null,
+    floorPhotoName: '',
+    rooms: [createRoomDraft(key + 1)],
+  };
+}
+const floorDrafts = ref<FloorDraft[]>([createFloorDraft()]);
+const activeFloorIndex = ref(0);
+const activeFloor = computed(() => floorDrafts.value[activeFloorIndex.value]);
+const activeRoomIndex = ref(0);
+const activeRoom = computed(() => activeFloor.value.rooms[activeRoomIndex.value]);
+const privateRoomSpace = computed(() => activeRoom.value.privateRoomSpace);
+const floorPhoto = computed({
+  get: () => activeFloor.value.floorPhoto,
+  set: (value: File | null) => { activeFloor.value.floorPhoto = value; },
+});
+const floorPhotoName = computed({
+  get: () => activeFloor.value.floorPhotoName,
+  set: (value: string) => { activeFloor.value.floorPhotoName = value; },
+});
+const roomPhoto = computed({
+  get: () => activeRoom.value.roomPhoto,
+  set: (value: File | null) => { activeRoom.value.roomPhoto = value; },
+});
+const roomPhotoName = computed({
+  get: () => activeRoom.value.roomPhotoName,
+  set: (value: string) => { activeRoom.value.roomPhotoName = value; },
+});
+const roomSpaces = computed({
+  get: () => activeRoom.value.bedspaces,
+  set: (value: BedspaceDraft[]) => { activeRoom.value.bedspaces = value; },
+});
+const gridRows = computed({
+  get: () => activeRoom.value.gridRows,
+  set: (value: number) => { activeRoom.value.gridRows = value; },
+});
+const gridColumns = computed({
+  get: () => activeRoom.value.gridColumns,
+  set: (value: number) => { activeRoom.value.gridColumns = value; },
+});
+const doorPosition = computed({
+  get: () => activeRoom.value.doorPosition,
+  set: (value: { row: number; column: number } | null) => { activeRoom.value.doorPosition = value; },
+});
 const coverPhoto = ref<File | null>(null);
-const floorPhoto = ref<File | null>(null);
-const roomPhoto = ref<File | null>(null);
+const coverPhotoPreview = ref('');
+const floorPhotoPreview = ref('');
+const roomPhotoPreview = ref('');
+const bedspacePhotoPreview = ref('');
 const coverPhotoName = ref('');
-const floorPhotoName = ref('');
-const roomPhotoName = ref('');
 const submitted = ref(false);
+const isLoadingListing = ref(isEditMode);
+const editLoadError = ref('');
+const existingListing = ref<{
+  id: number;
+  coverPhotoUrl: string | null;
+  floorIds: number[];
+  originalType: string;
+} | null>(null);
 const showConfirmation = ref(false);
 const isSubmitting = ref(false);
 const submitError = ref('');
 const bedspaceError = ref('');
 const showAddBedspaceConfirmation = ref(false);
 const showBedspaceForm = ref(false);
+const showTypeSwitchConfirmation = ref(false);
+const pendingListingType = ref<string | null>(null);
+const resetExistingLayout = ref(false);
 const isPlacingDoor = ref(false);
-const doorPosition = ref<{ row: number; column: number } | null>(null);
 const selectedCell = ref<{ row: number; column: number } | null>(null);
-const roomSpaces = ref<Array<{ id: number; row: number; column: number; name: string; price: number; image: File | null; amenities: string[]; houseRules: string[]; maintenance: string[] }>>([]);
-const gridRows = ref(3);
-const gridColumns = ref(4);
+const editingBedspaceId = ref<number | null>(null);
 const currentStep = ref(1);
 const formElement = ref<HTMLFormElement | null>(null);
 const normalizedRows = computed(() => Math.max(1, Math.floor(Number(gridRows.value) || 1)));
 const normalizedColumns = computed(() => Math.max(1, Math.floor(Number(gridColumns.value) || 1)));
+const allFloorsReady = computed(() => floorDrafts.value.length > 0 && floorDrafts.value.every((floor) =>
+  floor.rooms.length > 0 && floor.rooms.every((room) =>
+  form.type === 'Private room'
+    ? Number.isFinite(Number(room.privateRoomSpace.price)) && room.privateRoomSpace.price >= 1
+    : room.bedspaces.length > 0 && room.bedspaces.every((space) => Number.isFinite(space.price) && space.price >= 1))));
 const layoutCells = computed(() => Array.from(
   { length: normalizedRows.value * normalizedColumns.value },
   (_, index) => {
@@ -318,13 +481,129 @@ const layoutCells = computed(() => Array.from(
 watch(() => form.type, () => {
   if (currentStep.value > totalSteps.value) currentStep.value = totalSteps.value;
 });
-onMounted(() => {
-  void nextTick(initializeLocationMap);
+async function loadListingForEdit(spaceId: number) {
+  try {
+    const client = getSupabaseClient();
+    const { data: { user: host }, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    if (!host) throw new Error('Sign in again before editing your listing.');
+    const { data, error } = await client.from('spaces').select(`
+      id, host_id, name, location, type, description, monthly_rent, cover_photo_url, latitude, longitude,
+      floors(id, name, photo_url, rooms(
+        id, name, photo_url, monthly_rent, amenities, house_rules, maintenance, grid_rows, grid_columns,
+        door_row, door_column, bedspaces(id, name, price, row, column_index, photo_url, amenities, house_rules, maintenance)
+      ))
+    `).eq('id', spaceId).eq('host_id', host.id).single();
+    if (error) throw error;
+    if (!data) throw new Error('That listing could not be found.');
+
+    const floors = data.floors ?? [];
+    if (!floors.length || floors.some((floor: { rooms: unknown[] }) => floor.rooms.length === 0)) {
+      throw new Error('This listing must have at least one room on every floor before it can be edited.');
+    }
+    form.name = data.name;
+    form.location = data.location;
+    form.type = data.type;
+    form.description = data.description;
+    floorDrafts.value = floors.map((floor: {
+      id: number;
+      name: string;
+      photo_url: string | null;
+      rooms: Array<{
+        id: number;
+        name: string;
+        photo_url: string | null;
+        monthly_rent: number | null;
+        amenities: string[] | null;
+        house_rules: string[] | null;
+        maintenance: string[] | null;
+        grid_rows: number;
+        grid_columns: number;
+        door_row: number | null;
+        door_column: number | null;
+        bedspaces: Array<{
+          id: number;
+          row: number;
+          column_index: number;
+          name: string;
+          price: number;
+          photo_url: string | null;
+          amenities: string[] | null;
+          house_rules: string[] | null;
+          maintenance: string[] | null;
+        }>;
+      }>;
+    }, index: number) => {
+      return {
+        ...createFloorDraft(index + 1),
+        key: floor.id,
+        name: floor.name,
+        floorPhotoUrl: floor.photo_url,
+        floorPhotoName: floor.photo_url ? 'Current floor photo saved' : '',
+        floorId: floor.id,
+        rooms: floor.rooms.map((room, roomIndex) => ({
+          ...createRoomDraft(floor.id + roomIndex + 1),
+          name: room.name,
+          roomPhotoUrl: room.photo_url,
+          roomPhotoName: room.photo_url ? 'Current room photo saved' : '',
+          privateRoomSpace: {
+            price: Number(room.monthly_rent ?? data.monthly_rent),
+            amenities: room.amenities?.length ? [...room.amenities] : [''],
+            houseRules: room.house_rules?.length ? [...room.house_rules] : [''],
+            maintenance: room.maintenance?.length ? [...room.maintenance] : [''],
+          },
+          bedspaces: room.bedspaces.map((bedspace) => ({
+            id: bedspace.id,
+            row: bedspace.row,
+            column: bedspace.column_index,
+            name: bedspace.name,
+            price: Number(bedspace.price),
+            image: null,
+            photoUrl: bedspace.photo_url,
+            amenities: [...(bedspace.amenities ?? [])],
+            houseRules: [...(bedspace.house_rules ?? [])],
+            maintenance: [...(bedspace.maintenance ?? [])],
+          })),
+          gridRows: room.grid_rows,
+          gridColumns: room.grid_columns,
+          doorPosition: room.door_row !== null && room.door_column !== null
+            ? { row: room.door_row, column: room.door_column }
+            : null,
+          roomId: room.id,
+          bedspaceIds: room.bedspaces.map((bedspace) => bedspace.id),
+        })),
+      };
+    });
+    activeFloorIndex.value = 0;
+    activeRoomIndex.value = 0;
+    privateRoomRentText.value = formatRent(privateRoomSpace.value.price);
+    existingListing.value = {
+      id: data.id,
+      coverPhotoUrl: data.cover_photo_url,
+      floorIds: floorDrafts.value.map((floor) => floor.floorId).filter((id): id is number => id !== undefined),
+      originalType: data.type,
+    };
+    coverPhotoName.value = data.cover_photo_url ? 'Current cover photo saved' : '';
+    if (data.latitude !== null && data.longitude !== null) {
+      locationCoordinates.value = { latitude: Number(data.latitude), longitude: Number(data.longitude) };
+      hasSelectedLocation = true;
+      locationStatus.value = 'Saved listing location loaded.';
+    }
+  } catch (error) {
+    editLoadError.value = error instanceof Error ? error.message : 'Unable to load this listing for editing.';
+  } finally {
+    isLoadingListing.value = false;
+  }
+}
+onMounted(async () => {
+  if (isEditMode && editSpaceId !== null) await loadListingForEdit(editSpaceId);
+  await nextTick(initializeLocationMap);
 });
 onBeforeUnmount(() => {
   if (reverseGeocodeTimer) clearTimeout(reverseGeocodeTimer);
   reverseGeocodeController?.abort();
   locationMap?.remove();
+  [coverPhotoPreview, floorPhotoPreview, roomPhotoPreview, bedspacePhotoPreview].forEach(revokePhotoPreview);
 });
 watch(currentStep, async (step) => {
   if (step === 1) {
@@ -348,20 +627,68 @@ function handleCoverPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
   coverPhoto.value = input.files?.[0] ?? null;
   coverPhotoName.value = coverPhoto.value?.name || '';
+  setPhotoPreview(coverPhotoPreview, coverPhoto.value);
 }
 function handleFloorPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
   floorPhoto.value = input.files?.[0] ?? null;
   floorPhotoName.value = floorPhoto.value?.name || '';
+  setPhotoPreview(floorPhotoPreview, floorPhoto.value);
 }
 function handleRoomPhoto(event: Event) {
   const input = event.target as HTMLInputElement;
   roomPhoto.value = input.files?.[0] ?? null;
   roomPhotoName.value = roomPhoto.value?.name || '';
+  setPhotoPreview(roomPhotoPreview, roomPhoto.value);
 }
 function handleBedspacePhoto(event: Event) {
   const input = event.target as HTMLInputElement;
   bedspaceDraft.image = input.files?.[0] ?? null;
+  setPhotoPreview(bedspacePhotoPreview, bedspaceDraft.image);
+}
+function setPhotoPreview(preview: { value: string }, file: File | null) {
+  revokePhotoPreview(preview);
+  preview.value = file ? URL.createObjectURL(file) : '';
+}
+function revokePhotoPreview(preview: { value: string }) {
+  if (preview.value.startsWith('blob:')) URL.revokeObjectURL(preview.value);
+  preview.value = '';
+}
+function formatTextField(value: string, titleCase = false): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!titleCase) return normalized;
+  return normalized.replace(/(^|[\s-])([^\s-]+)/g, (_match, separator: string, word: string) => {
+    if (/^[A-Z\d]{2,4}$/.test(word)) return `${separator}${word}`;
+    return `${separator}${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`;
+  });
+}
+function formatRent(value: number): string {
+  return Number.isFinite(value) && value > 0
+    ? new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 }).format(value)
+    : '';
+}
+function updateRentInput(event: Event, field: 'private-room' | 'bedspace') {
+  const input = event.target as HTMLInputElement;
+  const sanitized = input.value.replace(/[^\d.]/g, '');
+  const decimalIndex = sanitized.indexOf('.');
+  const clean = decimalIndex === -1
+    ? sanitized
+    : `${sanitized.slice(0, decimalIndex)}.${sanitized.slice(decimalIndex + 1).replace(/\./g, '').slice(0, 2)}`;
+  if (field === 'private-room') {
+    privateRoomRentText.value = clean;
+    privateRoomSpace.value.price = Number(clean) || 0;
+  } else {
+    bedspaceRentText.value = clean;
+    bedspaceDraft.price = Number(clean) || 0;
+  }
+}
+function formatRentInput(event: Event, field: 'private-room' | 'bedspace') {
+  const input = event.target as HTMLInputElement;
+  const price = field === 'private-room' ? privateRoomSpace.value.price : bedspaceDraft.price;
+  const formatted = formatRent(price);
+  if (field === 'private-room') privateRoomRentText.value = formatted;
+  else bedspaceRentText.value = formatted;
+  input.value = formatted;
 }
 function initializeLocationMap() {
   if (!locationMapElement.value || locationMap) return;
@@ -489,9 +816,71 @@ function goToNextStep() {
   if (!formElement.value?.reportValidity()) return;
   currentStep.value += 1;
 }
+function selectFloor(index: number) {
+  if (index < 0 || index >= floorDrafts.value.length || index === activeFloorIndex.value) return;
+  activeFloorIndex.value = index;
+  activeRoomIndex.value = 0;
+  syncActiveRoomEditor();
+}
+function selectRoom(index: number) {
+  if (index < 0 || index >= activeFloor.value.rooms.length || index === activeRoomIndex.value) return;
+  activeRoomIndex.value = index;
+  syncActiveRoomEditor();
+}
+function syncActiveRoomEditor() {
+  privateRoomRentText.value = formatRent(privateRoomSpace.value.price);
+  setPhotoPreview(floorPhotoPreview, floorPhoto.value);
+  setPhotoPreview(roomPhotoPreview, roomPhoto.value);
+  resetBedspaceDraft();
+  bedspaceError.value = '';
+  showBedspaceForm.value = false;
+  editingBedspaceId.value = null;
+}
+function addFloor() {
+  const nextFloor = createFloorDraft(Date.now() + floorDrafts.value.length);
+  nextFloor.name = `Floor ${floorDrafts.value.length + 1}`;
+  floorDrafts.value.push(nextFloor);
+  selectFloor(floorDrafts.value.length - 1);
+}
+function addRoom() {
+  const nextRoom = createRoomDraft(Date.now() + activeFloor.value.rooms.length);
+  activeFloor.value.rooms.push(nextRoom);
+  selectRoom(activeFloor.value.rooms.length - 1);
+}
 function requestBedspace(row: number, column: number) {
   selectedCell.value = { row, column };
   showAddBedspaceConfirmation.value = true;
+}
+function requestListingTypeChange(type: string) {
+  if (type === form.type) return;
+  pendingListingType.value = type;
+  if (isEditMode && existingListing.value) {
+    showTypeSwitchConfirmation.value = true;
+    return;
+  }
+  applyListingTypeChange(type);
+}
+function applyListingTypeChange(type: string) {
+  form.type = type;
+  floorDrafts.value = [createFloorDraft()];
+  activeFloorIndex.value = 0;
+  activeRoomIndex.value = 0;
+  isPlacingDoor.value = false;
+  setPhotoPreview(floorPhotoPreview, null);
+  setPhotoPreview(roomPhotoPreview, null);
+  privateRoomRentText.value = '';
+  resetBedspaceDraft();
+  if (isEditMode) resetExistingLayout.value = true;
+}
+function cancelTypeSwitch() {
+  showTypeSwitchConfirmation.value = false;
+  pendingListingType.value = null;
+}
+function confirmTypeSwitch() {
+  if (!pendingListingType.value) return;
+  applyListingTypeChange(pendingListingType.value);
+  showTypeSwitchConfirmation.value = false;
+  pendingListingType.value = null;
 }
 function selectGridCell(row: number, column: number) {
   if (isPlacingDoor.value) {
@@ -500,6 +889,20 @@ function selectGridCell(row: number, column: number) {
     return;
   }
   requestBedspace(row, column);
+}
+function editBedspace(space: (typeof roomSpaces.value)[number]) {
+  selectedCell.value = { row: space.row, column: space.column };
+  editingBedspaceId.value = space.id;
+  bedspaceDraft.name = space.name;
+  bedspaceDraft.price = space.price;
+  bedspaceRentText.value = String(space.price);
+  bedspaceDraft.image = null;
+  bedspaceDraft.photoUrl = space.photoUrl ?? null;
+  setPhotoPreview(bedspacePhotoPreview, space.image);
+  bedspaceDraft.amenities = space.amenities.length ? [...space.amenities] : [''];
+  bedspaceDraft.houseRules = space.houseRules.length ? [...space.houseRules] : [''];
+  bedspaceDraft.maintenance = space.maintenance.length ? [...space.maintenance] : [''];
+  showBedspaceForm.value = true;
 }
 function cancelAddBedspace() {
   showAddBedspaceConfirmation.value = false;
@@ -512,6 +915,7 @@ function continueToBedspaceDetails() {
 function cancelBedspaceForm() {
   showBedspaceForm.value = false;
   selectedCell.value = null;
+  editingBedspaceId.value = null;
   bedspaceError.value = '';
   resetBedspaceDraft();
 }
@@ -524,38 +928,51 @@ function createBedspace() {
     bedspaceError.value = 'Enter a monthly rent greater than zero.';
     return;
   }
-  roomSpaces.value.push({
-    id: Date.now(),
+  const updatedBedspace = {
     row: cell.row,
     column: cell.column,
     name: bedspaceDraft.name.trim() || `Bed ${roomSpaces.value.length + 1}`,
     price: Number(bedspaceDraft.price) || 0,
     image: bedspaceDraft.image,
+    photoUrl: bedspaceDraft.photoUrl,
     amenities: bedspaceDraft.amenities.filter((item) => item.trim()),
     houseRules: bedspaceDraft.houseRules.filter((item) => item.trim()),
     maintenance: bedspaceDraft.maintenance.filter((item) => item.trim()),
-  });
+  };
+  const editingSpace = roomSpaces.value.find((space) => space.id === editingBedspaceId.value);
+  if (editingSpace) Object.assign(editingSpace, updatedBedspace);
+  else roomSpaces.value.push({ id: Date.now(), ...updatedBedspace });
   showBedspaceForm.value = false;
   selectedCell.value = null;
+  editingBedspaceId.value = null;
   bedspaceError.value = '';
   resetBedspaceDraft();
 }
 function resetBedspaceDraft() {
   bedspaceDraft.name = '';
   bedspaceDraft.price = 0;
+  bedspaceRentText.value = '';
   bedspaceDraft.image = null;
+  bedspaceDraft.photoUrl = null;
+  setPhotoPreview(bedspacePhotoPreview, null);
   bedspaceDraft.amenities = [''];
   bedspaceDraft.houseRules = [''];
   bedspaceDraft.maintenance = [''];
 }
 function openConfirmation() {
+  normalizeWizardFields();
+  if (isEditMode && !existingListing.value) {
+    submitError.value = editLoadError.value || 'The listing could not be loaded for editing.';
+    showConfirmation.value = true;
+    return;
+  }
   if (!locationCoordinates.value) {
     currentStep.value = 1;
     locationError.value = 'Choose your space location on the map before publishing.';
     return;
   }
   if (!formElement.value?.reportValidity()) return;
-  if (form.type === 'Bedspace' && roomSpaces.value.length === 0) return;
+  if (!allFloorsReady.value) return;
   showConfirmation.value = true;
   submitError.value = '';
 }
@@ -572,6 +989,7 @@ function getErrorMessage(error: unknown): string {
 }
 async function confirmPublish() {
   if (isSubmitting.value) return;
+  normalizeWizardFields();
   isSubmitting.value = true;
   submitError.value = '';
   const uploadedPaths: string[] = [];
@@ -583,37 +1001,48 @@ async function confirmPublish() {
     supabaseClient = client;
     const { data: { user: host }, error: authError } = await client.auth.getUser();
     if (authError) throw authError;
-    if (!host) throw new Error('Sign in again before publishing your listing.');
+    if (!host) throw new Error('Sign in again before saving your listing.');
     const selectedLocation = locationCoordinates.value;
-    if (!selectedLocation) throw new Error('Choose your space location on the map before publishing.');
-    if (form.type === 'Bedspace' && roomSpaces.value.some((space) => space.price < 1)) {
-      throw new Error('Every bedspace must have a monthly rent greater than zero.');
+    if (!selectedLocation) throw new Error('Choose your space location on the map before saving.');
+    if (isEditMode && !existingListing.value) throw new Error('The listing could not be loaded for editing.');
+    if (!floorDrafts.value.length) throw new Error('Add at least one floor before saving.');
+    if (floorDrafts.value.some((floor) => floor.rooms.length === 0)) {
+      throw new Error('Add at least one room to every floor.');
+    }
+    if (form.type === 'Bedspace' && floorDrafts.value.some((floor) =>
+      floor.rooms.some((room) => room.bedspaces.length === 0 || room.bedspaces.some((space) => space.price < 1)))) {
+      throw new Error('Add at least one bedspace with a valid monthly rent to every room.');
     }
 
-    const monthlyRent = form.type === 'Private room'
-      ? Number(privateRoomSpace.price)
-      : Math.min(...roomSpaces.value.map((space) => space.price));
+    const floorRents = form.type === 'Private room'
+      ? floorDrafts.value.flatMap((floor) => floor.rooms.map((room) => Number(room.privateRoomSpace.price)))
+      : floorDrafts.value.flatMap((floor) => floor.rooms.flatMap((room) => room.bedspaces.map((space) => space.price)));
+    const monthlyRent = Math.min(...floorRents);
     if (!Number.isFinite(monthlyRent) || monthlyRent < 1) {
-      throw new Error('Enter a monthly rent greater than zero.');
+      throw new Error('Enter a monthly rent greater than zero for every floor.');
     }
 
-    const { data: space, error: spaceError } = await client
-      .from('spaces')
-      .insert({
-        host_id: host.id,
-        name: form.name,
-        location: form.location,
-        type: form.type,
-        description: form.description,
-        monthly_rent: monthlyRent,
-        latitude: selectedLocation.latitude,
-        longitude: selectedLocation.longitude,
-        status: 'published',
-      })
-      .select('id')
-      .single();
-    if (spaceError) throw spaceError;
-    createdSpaceId = space.id;
+    if (isEditMode && editSpaceId !== null) {
+      createdSpaceId = editSpaceId;
+    } else {
+      const { data: space, error: spaceError } = await client
+        .from('spaces')
+        .insert({
+          host_id: host.id,
+          name: form.name,
+          location: form.location,
+          type: form.type,
+          description: form.description,
+          monthly_rent: monthlyRent,
+          latitude: selectedLocation.latitude,
+          longitude: selectedLocation.longitude,
+          status: 'published',
+        })
+        .select('id')
+        .single();
+      if (spaceError) throw spaceError;
+      createdSpaceId = space.id;
+    }
 
     const uploadPhoto = async (file: File | null, kind: string): Promise<string | null> => {
       if (!file) return null;
@@ -637,65 +1066,99 @@ async function confirmPublish() {
     };
 
     const coverPhotoUrl = await uploadPhoto(coverPhoto.value, 'Cover');
-    const floorPhotoUrl = await uploadPhoto(floorPhoto.value, 'Floor');
-    const roomPhotoUrl = await uploadPhoto(roomPhoto.value, 'Room');
-    if (coverPhotoUrl) {
-      const { error: coverPhotoError } = await client
-        .from('spaces')
-        .update({ cover_photo_url: coverPhotoUrl })
+    const savedCoverPhoto = coverPhotoUrl || existingListing.value?.coverPhotoUrl || null;
+    const isPrivateRoom = form.type === 'Private room';
+    for (const [index, floorDraft] of floorDrafts.value.entries()) {
+      const floorPhotoUrl = await uploadPhoto(floorDraft.floorPhoto, 'Floor');
+      const savedFloorPhoto = floorPhotoUrl || (resetExistingLayout.value ? null : floorDraft.floorPhotoUrl);
+      if (isEditMode && !resetExistingLayout.value && floorDraft.floorId !== undefined) {
+        const { error: floorError } = await client.from('floors').update({
+          name: floorDraft.name || `Floor ${index + 1}`,
+          photo_url: savedFloorPhoto,
+        }).eq('id', floorDraft.floorId).eq('space_id', createdSpaceId);
+        if (floorError) throw floorError;
+      } else {
+        const { data: floor, error: floorError } = await client.from('floors').insert({
+          space_id: createdSpaceId,
+          name: floorDraft.name || `Floor ${index + 1}`,
+          photo_url: floorPhotoUrl,
+        }).select('id').single();
+        if (floorError) throw floorError;
+        floorDraft.floorId = floor.id;
+      }
+
+      for (const [roomIndex, roomDraft] of floorDraft.rooms.entries()) {
+        const roomPhotoUrl = await uploadPhoto(roomDraft.roomPhoto, 'Room');
+        const roomDetails = {
+          space_id: createdSpaceId,
+          floor_id: floorDraft.floorId,
+          name: roomDraft.name || `Room ${roomIndex + 1}`,
+          photo_url: roomPhotoUrl || (resetExistingLayout.value ? null : roomDraft.roomPhotoUrl) || null,
+          monthly_rent: isPrivateRoom ? Number(roomDraft.privateRoomSpace.price) : null,
+          amenities: isPrivateRoom ? roomDraft.privateRoomSpace.amenities.filter((item) => item.trim()) : [],
+          house_rules: isPrivateRoom ? roomDraft.privateRoomSpace.houseRules.filter((item) => item.trim()) : [],
+          maintenance: isPrivateRoom ? roomDraft.privateRoomSpace.maintenance.filter((item) => item.trim()) : [],
+          grid_rows: Math.max(1, Math.floor(Number(roomDraft.gridRows) || 1)),
+          grid_columns: Math.max(1, Math.floor(Number(roomDraft.gridColumns) || 1)),
+          door_row: roomDraft.doorPosition?.row ?? null,
+          door_column: roomDraft.doorPosition?.column ?? null,
+        };
+        if (isEditMode && !resetExistingLayout.value && roomDraft.roomId !== undefined) {
+          const { error: roomError } = await client.from('rooms').update(roomDetails)
+            .eq('id', roomDraft.roomId).eq('space_id', createdSpaceId);
+          if (roomError) throw roomError;
+        } else {
+          const { data: room, error: roomError } = await client.from('rooms').insert(roomDetails).select('id').single();
+          if (roomError) throw roomError;
+          roomDraft.roomId = room.id;
+        }
+
+        if (!isPrivateRoom) for (const bedspace of roomDraft.bedspaces) {
+          const bedspaceDetails = {
+            space_id: createdSpaceId,
+            room_id: roomDraft.roomId,
+            name: bedspace.name,
+            price: bedspace.price,
+            row: bedspace.row,
+            column_index: bedspace.column,
+            photo_url: await uploadPhoto(bedspace.image, 'Bedspace') || bedspace.photoUrl || null,
+            amenities: bedspace.amenities,
+            house_rules: bedspace.houseRules,
+            maintenance: bedspace.maintenance,
+          };
+          if (!resetExistingLayout.value && roomDraft.bedspaceIds.includes(bedspace.id)) {
+            const { error: bedspaceError } = await client.from('bedspaces').update(bedspaceDetails)
+              .eq('id', bedspace.id).eq('room_id', roomDraft.roomId).eq('space_id', createdSpaceId);
+            if (bedspaceError) throw bedspaceError;
+          } else {
+            const { error: bedspaceError } = await client.from('bedspaces').insert(bedspaceDetails);
+            if (bedspaceError) throw bedspaceError;
+          }
+        }
+      }
+    }
+
+    if (isEditMode) {
+      const { error: updateError } = await client.from('spaces').update({
+        name: form.name,
+        location: form.location,
+        type: form.type,
+        description: form.description,
+        monthly_rent: monthlyRent,
+        cover_photo_url: savedCoverPhoto,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+      }).eq('id', createdSpaceId).eq('host_id', host.id);
+      if (updateError) throw updateError;
+      if (resetExistingLayout.value && existingListing.value) {
+        const { error: deleteOldLayoutError } = await client.from('floors').delete()
+          .in('id', existingListing.value.floorIds).eq('space_id', createdSpaceId);
+        if (deleteOldLayoutError) throw new Error(`The new listing details were saved, but the old room layout and its bookings could not be removed: ${deleteOldLayoutError.message}`);
+      }
+    } else if (coverPhotoUrl) {
+      const { error: coverPhotoError } = await client.from('spaces').update({ cover_photo_url: coverPhotoUrl })
         .eq('id', createdSpaceId);
       if (coverPhotoError) throw coverPhotoError;
-    }
-    const { data: floor, error: floorError } = await client
-      .from('floors')
-      .insert({
-        space_id: createdSpaceId,
-        name: form.floorName || 'Floor 1',
-        photo_url: floorPhotoUrl,
-      })
-      .select('id')
-      .single();
-    if (floorError) throw floorError;
-
-    const isPrivateRoom = form.type === 'Private room';
-    const { data: room, error: roomError } = await client
-      .from('rooms')
-      .insert({
-        space_id: createdSpaceId,
-        floor_id: floor.id,
-        name: (isPrivateRoom ? privateRoomSpace.name : '') || form.roomName || 'Room 1',
-        photo_url: roomPhotoUrl,
-        monthly_rent: isPrivateRoom ? monthlyRent : null,
-        amenities: isPrivateRoom ? privateRoomSpace.amenities.filter((item) => item.trim()) : [],
-        house_rules: isPrivateRoom ? privateRoomSpace.houseRules.filter((item) => item.trim()) : [],
-        maintenance: isPrivateRoom ? privateRoomSpace.maintenance.filter((item) => item.trim()) : [],
-        grid_rows: normalizedRows.value,
-        grid_columns: normalizedColumns.value,
-        door_row: doorPosition.value?.row ?? null,
-        door_column: doorPosition.value?.column ?? null,
-      })
-      .select('id')
-      .single();
-    if (roomError) throw roomError;
-
-    if (!isPrivateRoom) {
-      const bedspaces = [];
-      for (const bedspace of roomSpaces.value) {
-        bedspaces.push({
-          space_id: createdSpaceId,
-          room_id: room.id,
-          name: bedspace.name,
-          price: bedspace.price,
-          row: bedspace.row,
-          column_index: bedspace.column,
-          photo_url: await uploadPhoto(bedspace.image, 'Bedspace'),
-          amenities: bedspace.amenities,
-          house_rules: bedspace.houseRules,
-          maintenance: bedspace.maintenance,
-        });
-      }
-      const { error: bedspacesError } = await client.from('bedspaces').insert(bedspaces);
-      if (bedspacesError) throw bedspacesError;
     }
 
     showConfirmation.value = false;
@@ -703,7 +1166,7 @@ async function confirmPublish() {
   } catch (error) {
     const cleanupErrors: string[] = [];
     if (createdSpaceId !== null && supabaseClient) {
-      if (uploadedPaths.length > 0) {
+      if (uploadedPaths.length > 0 && !isEditMode) {
         try {
           const { error: storageCleanupError } = await supabaseClient
             .storage.from('space-photos').remove(uploadedPaths);
@@ -712,12 +1175,14 @@ async function confirmPublish() {
           cleanupErrors.push(`Photo cleanup failed: ${getErrorMessage(cleanupError)}`);
         }
       }
-      try {
-        const { error: spaceCleanupError } = await supabaseClient
-          .from('spaces').delete().eq('id', createdSpaceId);
-        if (spaceCleanupError) cleanupErrors.push(`Listing cleanup failed: ${spaceCleanupError.message}`);
-      } catch (cleanupError) {
-        cleanupErrors.push(`Listing cleanup failed: ${getErrorMessage(cleanupError)}`);
+      if (!isEditMode) {
+        try {
+          const { error: spaceCleanupError } = await supabaseClient
+            .from('spaces').delete().eq('id', createdSpaceId);
+          if (spaceCleanupError) cleanupErrors.push(`Listing cleanup failed: ${spaceCleanupError.message}`);
+        } catch (cleanupError) {
+          cleanupErrors.push(`Listing cleanup failed: ${getErrorMessage(cleanupError)}`);
+        }
       }
     }
     const message = getErrorMessage(error);
@@ -731,6 +1196,34 @@ function addItem(items: string[]) {
 }
 function removeItem(items: string[], index: number) {
   items.splice(index, 1);
+}
+function normalizeWizardFields() {
+  form.name = formatTextField(form.name, true);
+  form.location = formatTextField(form.location, true);
+  form.description = formatTextField(form.description);
+  floorDrafts.value.forEach((floor) => {
+    floor.name = formatTextField(floor.name, true);
+    floor.rooms.forEach((room) => {
+      room.name = formatTextField(room.name, true);
+      room.privateRoomSpace.amenities = room.privateRoomSpace.amenities.map((item) => formatTextField(item));
+      room.privateRoomSpace.houseRules = room.privateRoomSpace.houseRules.map((item) => formatTextField(item));
+      room.privateRoomSpace.maintenance = room.privateRoomSpace.maintenance.map((item) => formatTextField(item));
+    });
+  });
+  bedspaceDraft.name = formatTextField(bedspaceDraft.name, true);
+  bedspaceDraft.amenities = bedspaceDraft.amenities.map((item) => formatTextField(item));
+  bedspaceDraft.houseRules = bedspaceDraft.houseRules.map((item) => formatTextField(item));
+  bedspaceDraft.maintenance = bedspaceDraft.maintenance.map((item) => formatTextField(item));
+  floorDrafts.value.forEach((floor) => {
+    floor.rooms.forEach((room) => {
+      room.bedspaces.forEach((space) => {
+        space.name = formatTextField(space.name, true);
+        space.amenities = space.amenities.map((item) => formatTextField(item));
+        space.houseRules = space.houseRules.map((item) => formatTextField(item));
+        space.maintenance = space.maintenance.map((item) => formatTextField(item));
+      });
+    });
+  });
 }
 </script>
 
@@ -1143,6 +1636,47 @@ fieldset legend {
   margin-top: 17px;
 }
 
+.floor-selector,
+.room-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.room-selector {
+  margin-top: 0;
+}
+
+.floor-selector button,
+.room-selector button {
+  background: #f3f7f1;
+  border: 1px solid #dce8da;
+  border-radius: 999px;
+  color: #42644e;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 9px 14px;
+}
+
+.floor-selector button.active,
+.room-selector button.active {
+  background: #174b35;
+  border-color: #174b35;
+  color: #fff;
+}
+
+.floor-selector .add-floor-button,
+.room-selector .add-floor-button {
+  align-items: center;
+  background: #fff;
+  border: 1px dashed #e2743e;
+  color: #d46938;
+  display: inline-flex;
+  gap: 6px;
+}
+
 .photo-field-label {
   color: #174b35;
   font-size: 10px;
@@ -1174,6 +1708,14 @@ fieldset legend {
 
 .photo-dropzone input {
   display: none;
+}
+
+.photo-preview {
+  border-radius: 9px;
+  max-height: 210px;
+  max-width: min(100%, 440px);
+  object-fit: cover;
+  width: 100%;
 }
 
 .photo-dropzone ion-icon {
@@ -1336,6 +1878,69 @@ fieldset legend {
   padding: 28px;
   text-align: center;
   width: 100%;
+}
+
+.type-switch-dialog {
+  max-width: 470px;
+}
+
+.warning-icon {
+  background: #fff0e8;
+  color: #b85b32;
+}
+
+.destructive-confirm {
+  background: #a4472a;
+}
+
+.dialog-enter-active,
+.dialog-leave-active {
+  transition: opacity .2s ease;
+}
+
+.dialog-enter-active .confirmation-dialog,
+.dialog-enter-active .bedspace-dialog,
+.dialog-leave-active .confirmation-dialog,
+.dialog-leave-active .bedspace-dialog {
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
+.dialog-enter-from .confirmation-dialog,
+.dialog-enter-from .bedspace-dialog,
+.dialog-leave-to .confirmation-dialog,
+.dialog-leave-to .bedspace-dialog {
+  opacity: 0;
+  transform: translateY(12px) scale(.98);
+}
+
+.form-card {
+  animation: form-card-enter .3s ease both;
+}
+
+@keyframes form-card-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bed-item-enter-active,
+.bed-item-leave-active,
+.bed-item-move {
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.bed-item-enter-from,
+.bed-item-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(.96);
+}
+
+.bed-item-leave-active {
+  position: absolute;
 }
 
 .dialog-icon {
@@ -1555,6 +2160,27 @@ fieldset legend {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.edit-bedspace-button {
+  background: #e5f1e4;
+  border: 0;
+  border-radius: 3px;
+  color: #35744a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 3px 5px;
+}
+
+.form-status {
+  background: #fff;
+  border: 1px solid #e5ebe4;
+  border-radius: 8px;
+  color: #849087;
+  margin-top: 24px;
+  padding: 18px;
 }
 
 .cell-position {
@@ -1781,6 +2407,23 @@ fieldset legend {
 
   .success-card a {
     margin-left: 63px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-enter-active,
+  .dialog-leave-active,
+  .dialog-enter-active .confirmation-dialog,
+  .dialog-enter-active .bedspace-dialog,
+  .dialog-leave-active .confirmation-dialog,
+  .dialog-leave-active .bedspace-dialog,
+  .form-card,
+  .bed-item-enter-active,
+  .bed-item-leave-active,
+  .bed-item-move,
+  .host-bed-grid.is-adding-bedspace .host-grid-cell {
+    animation: none !important;
+    transition: none !important;
   }
 }
 </style>

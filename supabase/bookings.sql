@@ -37,6 +37,117 @@ create policy "Tenants can view their own bookings"
 on public.bookings for select
 using (auth.uid() = tenant_id);
 
+drop policy if exists "Hosts can view booking requests for their spaces" on public.bookings;
+create policy "Hosts can view booking requests for their spaces"
+on public.bookings for select
+using (public.owns_space(listing_id));
+
+create or replace function public.update_host_booking_request(
+  p_booking_id bigint,
+  p_request_status text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  target_listing_id bigint;
+  current_status text;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in to update booking requests.';
+  end if;
+
+  if p_request_status is null or p_request_status not in ('approved', 'declined', 'completed') then
+    raise exception 'Choose approve, decline, or end the tenancy.';
+  end if;
+
+  select b.listing_id, b.request_status
+  into target_listing_id, current_status
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'This booking request no longer exists.';
+  end if;
+
+  if not public.owns_space(target_listing_id) then
+    raise exception 'You do not have permission to update this booking request.';
+  end if;
+
+  if current_status = p_request_status then
+    return;
+  end if;
+
+  if current_status = 'pending' and p_request_status in ('approved', 'declined') then
+    update public.bookings
+    set request_status = p_request_status
+    where id = p_booking_id;
+    return;
+  end if;
+
+  if current_status = 'approved' and p_request_status = 'completed' then
+    update public.bookings
+    set request_status = p_request_status
+    where id = p_booking_id;
+    return;
+  end if;
+
+  raise exception 'This booking request cannot be changed from % to %.', current_status, p_request_status;
+end;
+$$;
+
+revoke all on function public.update_host_booking_request(bigint, text) from public;
+grant execute on function public.update_host_booking_request(bigint, text) to authenticated;
+
+create or replace function public.end_host_tenancy(p_booking_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_listing_id bigint;
+  current_status text;
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to end a tenancy.';
+  end if;
+
+  select b.listing_id, b.request_status
+  into target_listing_id, current_status
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'This booking no longer exists.';
+  end if;
+
+  if not public.owns_space(target_listing_id) then
+    raise exception 'You do not have permission to end this tenancy.';
+  end if;
+
+  if current_status = 'completed' then
+    return;
+  end if;
+
+  if current_status <> 'approved' then
+    raise exception 'Only an approved tenancy can be ended.';
+  end if;
+
+  update public.bookings
+  set request_status = 'completed'
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.end_host_tenancy(bigint) from public;
+grant execute on function public.end_host_tenancy(bigint) to authenticated;
+
 create or replace function public.get_booked_listing_spaces()
 returns table(room_id bigint, bedspace_id bigint)
 language sql
@@ -210,3 +321,5 @@ $$;
 revoke all on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) from public;
 grant execute on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) to authenticated;
 drop function if exists public.complete_booking_after_receipt(uuid, bigint, bigint, bigint, text, text, date, text);
+
+notify pgrst, 'reload schema';

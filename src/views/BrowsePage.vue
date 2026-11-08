@@ -271,16 +271,17 @@ function refreshListingMarkers() {
   markerLayer.clearLayers();
   filteredListings.value.forEach((listing) => {
     if (!listing.coordinates) return;
-    const priceLabel = `${(listing.price / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}k`;
+    const priceLabel = `₱${listing.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
     const fullyBooked = isListingFullyBooked(listing);
+    const markerWidth = Math.max(54, priceLabel.length * 7 + (fullyBooked ? 38 : 20));
     const icon = L.divIcon({
       className: fullyBooked ? 'listing-price-marker fully-booked-marker' : 'listing-price-marker',
-      html: fullyBooked ? `<span><small>FULL</small>₱${priceLabel}</span>` : `<span>₱${priceLabel}</span>`,
-      iconSize: fullyBooked ? [68, 38] : [54, 34],
-      iconAnchor: fullyBooked ? [34, 19] : [27, 17],
+      html: fullyBooked ? `<span><small>FULL</small>${priceLabel}</span>` : `<span>${priceLabel}</span>`,
+      iconSize: [markerWidth, fullyBooked ? 38 : 34],
+      iconAnchor: [markerWidth / 2, fullyBooked ? 19 : 17],
     });
     L.marker([listing.coordinates.latitude, listing.coordinates.longitude], { icon })
-      .bindTooltip(`${fullyBooked ? 'Fully booked · ' : ''}${listing.name} · ₱${listing.price.toLocaleString()} / month`)
+      .bindTooltip(`${fullyBooked ? 'Fully booked · ' : ''}${listing.name} · ${priceLabel} / month`)
       .on('click', () => { selectedListing.value = listing; })
       .addTo(markerLayer);
   });
@@ -1187,20 +1188,25 @@ function clearFilters() {
   border: 2px solid #fff;
   border-radius: 18px;
   box-shadow: 0 2px 6px rgba(23, 75, 53, .3);
+  box-sizing: border-box;
   color: #fff;
   display: flex;
   font: 700 10px 'DM Sans', sans-serif;
   height: 30px;
   justify-content: center;
   white-space: nowrap;
-  width: 52px;
+  min-width: 52px;
+  padding: 0 8px;
+  width: 100%;
 }
 
 :global(.listing-price-marker.fully-booked-marker span) {
   background: #7541a5;
   border-radius: 18px;
   height: 36px;
-  width: 66px;
+  min-width: 66px;
+  padding: 0 8px;
+  width: 100%;
 }
 
 :global(.listing-price-marker.fully-booked-marker span small) {

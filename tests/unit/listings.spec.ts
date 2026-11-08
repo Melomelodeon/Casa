@@ -72,6 +72,8 @@ describe('database listings', () => {
       id: '41',
       name: 'Garden Room',
       status: 'available',
+      amenities: ['Wi-Fi'],
+      houseRules: ['Quiet hours'],
       grid: { rows: 2, columns: 3, door: { row: 1, column: 3 } },
       beds: [
         {
@@ -81,6 +83,8 @@ describe('database listings', () => {
           row: 2,
           column: 1,
           price: 7200,
+          amenities: ['Wi-Fi'],
+          houseRules: ['Quiet hours'],
           maintenance: ['Bed frame checked'],
         },
         {
@@ -91,9 +95,15 @@ describe('database listings', () => {
           row: 1,
           column: 2,
           price: 8500,
+          amenities: ['Desk'],
+          houseRules: [],
+          maintenance: [],
         },
       ],
     });
+    const [mappedRoom] = getBookingFloors(listing)[0].rooms;
+    expect(mappedRoom.beds[0].amenities).not.toEqual(mappedRoom.beds[1].amenities);
+    expect(mappedRoom.beds[0].maintenance).not.toEqual(mappedRoom.beds[1].maintenance);
     expect(getBookingFloors(listing)[0].rooms[0].beds.map(({ id, row, column }) => ({ id, row, column }))).toEqual([
       { id: '51', row: 2, column: 1 },
       { id: '52', row: 1, column: 2 },
@@ -128,9 +138,22 @@ describe('database listings', () => {
           name: 'Room 1',
           photo_url: null,
           monthly_rent: 9000,
-          amenities: [],
-          house_rules: [],
-          maintenance: [],
+          amenities: ['Room A Wi-Fi'],
+          house_rules: ['Room A quiet hours'],
+          maintenance: ['Room A serviced'],
+          grid_rows: 1,
+          grid_columns: 1,
+          door_row: null,
+          door_column: null,
+          bedspaces: [],
+        }, {
+          id: 42,
+          name: 'Room 2',
+          photo_url: null,
+          monthly_rent: 9500,
+          amenities: ['Room B desk'],
+          house_rules: ['Room B visitors by approval'],
+          maintenance: ['Room B cleaned'],
           grid_rows: 1,
           grid_columns: 1,
           door_row: null,
@@ -140,7 +163,131 @@ describe('database listings', () => {
       }],
     }], [{ room_id: 41, bedspace_id: null }]);
 
-    expect(getBookingFloors(listing)[0].rooms[0].status).toBe('occupied');
-    expect(isListingFullyBooked(listing)).toBe(true);
+    expect(getBookingFloors(listing)[0].rooms[0]).toMatchObject({
+      status: 'occupied',
+      amenities: ['Room A Wi-Fi'],
+      houseRules: ['Room A quiet hours'],
+      maintenance: ['Room A serviced'],
+    });
+    expect(getBookingFloors(listing)[0].rooms[1]).toMatchObject({
+      status: 'available',
+      amenities: ['Room B desk'],
+      houseRules: ['Room B visitors by approval'],
+      maintenance: ['Room B cleaned'],
+    });
+    expect(isListingFullyBooked(listing)).toBe(false);
+  });
+
+  test('uses the lowest bookable price across every room and floor', () => {
+    const [bedspaceListing, privateRoomListing] = mapDatabaseSpaces([
+      {
+        id: 1,
+        name: 'Bedspace listing',
+        location: 'Makati',
+        type: 'Bedspace',
+        description: '',
+        monthly_rent: 12000,
+        cover_photo_url: null,
+        latitude: null,
+        longitude: null,
+        created_at: '2026-11-08T10:00:00Z',
+        floors: [
+          {
+            id: 2,
+            name: 'First floor',
+            photo_url: null,
+            rooms: [{
+              id: 3,
+              name: 'Room A',
+              photo_url: null,
+              monthly_rent: null,
+              amenities: [],
+              house_rules: [],
+              maintenance: [],
+              grid_rows: 1,
+              grid_columns: 1,
+              door_row: null,
+              door_column: null,
+              bedspaces: [{
+                id: 4, name: 'Bed A', price: 8500, row: 1, column_index: 1,
+                photo_url: null, amenities: [], house_rules: [], maintenance: [],
+              }],
+            }],
+          },
+          {
+            id: 5,
+            name: 'Second floor',
+            photo_url: null,
+            rooms: [{
+              id: 6,
+              name: 'Room B',
+              photo_url: null,
+              monthly_rent: null,
+              amenities: [],
+              house_rules: [],
+              maintenance: [],
+              grid_rows: 1,
+              grid_columns: 1,
+              door_row: null,
+              door_column: null,
+              bedspaces: [{
+                id: 7, name: 'Bed B', price: 7200, row: 1, column_index: 1,
+                photo_url: null, amenities: [], house_rules: [], maintenance: [],
+              }],
+            }],
+          },
+        ],
+      },
+      {
+        id: 8,
+        name: 'Private room listing',
+        location: 'Makati',
+        type: 'Private room',
+        description: '',
+        monthly_rent: 12000,
+        cover_photo_url: null,
+        latitude: null,
+        longitude: null,
+        created_at: '2026-11-08T10:00:00Z',
+        floors: [{
+          id: 9,
+          name: 'Ground floor',
+          photo_url: null,
+          rooms: [
+            {
+              id: 10,
+              name: 'Room A',
+              photo_url: null,
+              monthly_rent: 9500,
+              amenities: [],
+              house_rules: [],
+              maintenance: [],
+              grid_rows: 1,
+              grid_columns: 1,
+              door_row: null,
+              door_column: null,
+              bedspaces: [],
+            },
+            {
+              id: 11,
+              name: 'Room B',
+              photo_url: null,
+              monthly_rent: 7800,
+              amenities: [],
+              house_rules: [],
+              maintenance: [],
+              grid_rows: 1,
+              grid_columns: 1,
+              door_row: null,
+              door_column: null,
+              bedspaces: [],
+            },
+          ],
+        }],
+      },
+    ]);
+
+    expect(bedspaceListing.price).toBe(7200);
+    expect(privateRoomListing.price).toBe(7800);
   });
 });

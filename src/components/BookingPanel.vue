@@ -25,7 +25,7 @@
       <div v-else-if="step === 'rooms'" key="rooms" class="visual-stage">
         <div class="visual-grid room-grid">
           <button v-for="room in selectedFloor?.rooms" :key="room.id" class="visual-card"
-            :class="{ 'occupied-room': room.status === 'occupied' }" :disabled="room.status === 'occupied'"
+            :class="{ 'occupied-room': room.status === 'occupied' }" :disabled="!readOnly && room.status === 'occupied'"
             type="button" @click="selectRoom(room)">
             <img :src="room.image || defaultRoomImage" :alt="room.name" @error="useFallback($event, defaultRoomImage)" />
             <div class="card-title"><span class="card-icon"><ion-icon :icon="homeOutline" /></span><strong>{{ room.name }}</strong></div>
@@ -55,7 +55,7 @@
                 :class="{ occupied: bed.status === 'occupied' }"
                 :style="{ gridRow: bedIndex + 1 }"
                 type="button"
-                :disabled="bed.status === 'occupied'"
+                :disabled="!readOnly && bed.status === 'occupied'"
                 :aria-label="`${bed.name}, ${bed.status}`"
                 @click="selectBed(bed)"
               >
@@ -74,25 +74,25 @@
     <div v-if="selectedBookingDetails" class="selected-booking">
       <img :src="selectedBookingDetails.image" :alt="selectedBookingDetails.name" @error="useFallback($event, selectedBookingDetails.fallback)" />
       <div><span class="ready-label"><ion-icon :icon="selectedBookingDetails.icon" /> {{ selectedBookingDetails.label }}</span><strong>{{ selectedBookingDetails.name }}</strong><small><ion-icon :icon="homeOutline" /> {{ selectedBookingDetails.subtitle }} · ₱{{ selectedBookingDetails.price.toLocaleString() }} / month</small></div>
-      <div v-if="selectedBed?.maintenance?.length" class="selected-booking-history">
-        <strong>Maintenance history</strong>
-        <ul>
-          <li v-for="entry in selectedBed.maintenance" :key="entry">{{ entry }}</li>
-        </ul>
-      </div>
-      <div v-if="listing.includedAmenities.length" class="selected-booking-history">
+      <div v-if="selectedAmenities.length" class="selected-booking-history">
         <strong>Amenities included</strong>
         <ul>
-          <li v-for="amenity in listing.includedAmenities" :key="amenity">{{ amenity }}</li>
+          <li v-for="amenity in selectedAmenities" :key="amenity">{{ amenity }}</li>
         </ul>
       </div>
-      <div v-if="listing.houseRules.length" class="selected-booking-history">
+      <div v-if="selectedHouseRules.length" class="selected-booking-history">
         <strong>House rules</strong>
         <ul>
-          <li v-for="rule in listing.houseRules" :key="rule">{{ rule }}</li>
+          <li v-for="rule in selectedHouseRules" :key="rule">{{ rule }}</li>
         </ul>
       </div>
-      <button v-if="selectedBookingDetails.canBook" type="button" @click="emit('book', selectedBookingDetails.selection)">Continue booking <ion-icon :icon="arrowForwardOutline" /></button>
+      <div v-if="selectedMaintenance.length" class="selected-booking-history">
+        <strong>Maintenance history</strong>
+        <ul>
+          <li v-for="entry in selectedMaintenance" :key="entry">{{ entry }}</li>
+        </ul>
+      </div>
+      <button v-if="!readOnly && selectedBookingDetails.canBook" type="button" @click="emit('book', selectedBookingDetails.selection)">Continue booking <ion-icon :icon="arrowForwardOutline" /></button>
     </div>
   </section>
 </template>
@@ -103,16 +103,27 @@ import { IonIcon } from '@ionic/vue';
 import { addOutline, arrowBackOutline, arrowForwardOutline, bedOutline, businessOutline, checkmarkCircleOutline, enterOutline, gridOutline, homeOutline, lockClosedOutline } from 'ionicons/icons';
 import { defaultFloorImage, defaultRoomImage, type BookingBed, type BookingFloor, type BookingRoom, type BookingSelection } from '../data/listings';
 
-type BookingListing = { name: string; type: string; price: number; image?: string; includedAmenities: string[]; houseRules: string[] };
-const props = defineProps<{ listing: BookingListing; floors: BookingFloor[] }>();
+type BookingListing = { name: string; type: string; price: number; image?: string };
+const props = defineProps<{ listing: BookingListing; floors: BookingFloor[]; readOnly?: boolean }>();
 const emit = defineEmits<{ book: [selection: BookingSelection] }>();
 const step = ref<'floors' | 'rooms' | 'beds'>('floors');
 const selectedFloor = ref<BookingFloor | null>(null);
 const selectedRoom = ref<BookingRoom | null>(null);
-const selectedBed = ref<BookingBed | null>(null);
 const selectedBooking = ref<BookingSelection | null>(null);
 
 const floors = computed(() => props.floors);
+const selectedAmenities = computed(() => uniqueDetails([
+  ...(selectedRoom.value?.amenities ?? []),
+  ...(selectedBooking.value?.value.amenities ?? []),
+]));
+const selectedHouseRules = computed(() => uniqueDetails([
+  ...(selectedRoom.value?.houseRules ?? []),
+  ...(selectedBooking.value?.value.houseRules ?? []),
+]));
+const selectedMaintenance = computed(() => uniqueDetails([
+  ...(selectedRoom.value?.maintenance ?? []),
+  ...(selectedBooking.value?.value.maintenance ?? []),
+]));
 const stepTitle = computed(() => step.value === 'floors' ? 'Choose a floor' : step.value === 'rooms' ? `${selectedFloor.value?.name} rooms` : `${selectedRoom.value?.name} layout`);
 const stepSummary = computed(() => step.value === 'floors' ? `${floors.value.length} ${floors.value.length === 1 ? 'floor' : 'floors'}` : step.value === 'rooms' ? `${selectedFloor.value?.rooms.length ?? 0} rooms` : `${selectedRoom.value?.beds.length ?? 0} beds`);
 const stepIcon = computed(() => step.value === 'floors' ? businessOutline : step.value === 'rooms' ? homeOutline : gridOutline);
@@ -164,24 +175,25 @@ const gridCells = computed(() => {
 watch(() => props.listing.name, reset);
 watch(() => props.floors, reset);
 
+function uniqueDetails(details: string[]): string[] {
+  return [...new Set(details.map((detail) => detail.trim()).filter(Boolean))];
+}
+
 function reset() {
   step.value = 'floors';
   selectedFloor.value = null;
   selectedRoom.value = null;
-  selectedBed.value = null;
   selectedBooking.value = null;
 }
 function selectFloor(floor: BookingFloor) {
   selectedFloor.value = floor;
   selectedRoom.value = null;
-  selectedBed.value = null;
   selectedBooking.value = null;
   step.value = 'rooms';
 }
 function selectRoom(room: BookingRoom) {
-  if (room.status === 'occupied') return;
+  if (!props.readOnly && room.status === 'occupied') return;
   selectedRoom.value = room;
-  selectedBed.value = null;
   if (props.listing.type !== 'Bedspace') {
     selectedBooking.value = { kind: 'room', value: room };
     step.value = 'rooms';
@@ -191,16 +203,14 @@ function selectRoom(room: BookingRoom) {
   }
 }
 function selectBed(bed: BookingBed) {
-  if (bed.status === 'occupied') return;
+  if (!props.readOnly && bed.status === 'occupied') return;
   const selected = { ...bed, roomId: selectedRoom.value?.id };
-  selectedBed.value = selected;
   selectedBooking.value = { kind: 'bed', value: selected };
 }
 function goBack() {
   if (step.value === 'beds') {
     step.value = 'rooms';
     selectedRoom.value = null;
-    selectedBed.value = null;
     selectedBooking.value = null;
   } else {
     step.value = 'floors';

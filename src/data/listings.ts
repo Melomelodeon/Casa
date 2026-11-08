@@ -26,6 +26,8 @@ export type BookingBed = {
   level?: number;
   image?: string;
   price?: number;
+  amenities?: string[];
+  houseRules?: string[];
   maintenance?: string[];
 };
 
@@ -40,6 +42,9 @@ export type BookingRoom = {
   status: 'available' | 'occupied';
   image?: string;
   price?: number;
+  amenities?: string[];
+  houseRules?: string[];
+  maintenance?: string[];
   beds: BookingBed[];
   grid: { rows: number; columns: number; door?: BookingGridPosition };
 };
@@ -147,6 +152,8 @@ export function mapDatabaseSpaces(
             column: bedspace.column_index,
             image: bedspace.photo_url || undefined,
             price: Number(bedspace.price),
+            amenities: [...bedspace.amenities],
+            houseRules: [...bedspace.house_rules],
             maintenance: bedspace.maintenance,
           };
         });
@@ -157,6 +164,9 @@ export function mapDatabaseSpaces(
           status: bookedRoomIds.has(String(room.id)) ? 'occupied' : 'available',
           image: room.photo_url || defaultRoomImage,
           price: room.monthly_rent === null ? undefined : Number(room.monthly_rent),
+          amenities: [...room.amenities],
+          houseRules: [...room.house_rules],
+          maintenance: [...room.maintenance],
           beds,
           grid: {
             rows: room.grid_rows,
@@ -168,6 +178,10 @@ export function mapDatabaseSpaces(
         };
       }),
     }));
+    const bookablePrices = space.type === 'Private room'
+      ? floors.flatMap((floor) => floor.rooms.map((room) => room.price ?? NaN))
+      : floors.flatMap((floor) => floor.rooms.flatMap((room) => room.beds.map((bed) => bed.price ?? NaN)));
+    const validBookablePrices = bookablePrices.filter((price) => Number.isFinite(price) && price > 0);
 
     return {
       id: space.id,
@@ -177,7 +191,9 @@ export function mapDatabaseSpaces(
         && typeof space.longitude === 'number' && Number.isFinite(space.longitude)
         ? { latitude: Number(space.latitude), longitude: Number(space.longitude) }
         : null,
-      price: Number(space.monthly_rent),
+      price: validBookablePrices.length > 0
+        ? Math.min(...validBookablePrices)
+        : Number(space.monthly_rent),
       rating: '—',
       type: space.type,
       amenities: includedAmenities.size,
