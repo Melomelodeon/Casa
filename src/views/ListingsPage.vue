@@ -8,7 +8,6 @@
         </a>
         <nav class="header-nav">
           <a href="/browse"><ion-icon :icon="mapOutline" /> Explore map</a>
-          <a href="/signup?role=landlord">List your space</a>
           <template v-if="user">
             <a class="account-link" :href="accountPath"><ion-icon :icon="personOutline" /> {{ displayName }}</a>
             <button class="logout-button" type="button" @click="logout">Log out</button>
@@ -64,11 +63,6 @@
           <div v-if="!isLoading && !listingsError && filteredListings.length === 0" class="empty-state" data-reveal><ion-icon :icon="searchOutline" /><h2>Nothing found just yet.</h2><p>Try another area or remove one of your filters.</p><button type="button" @click="clearFilters">Show all spaces</button></div>
         </section>
 
-        <section class="host-banner" data-reveal>
-          <div class="banner-sparkle" data-reveal>✦</div>
-          <div data-reveal><span>HAVE A SPACE TO SHARE?</span><h2>Make room for someone’s next chapter.</h2></div>
-          <a href="/signup?role=landlord" data-reveal>Become a Casa host <ion-icon :icon="arrowForwardOutline" /></a>
-        </section>
       </main>
       <div v-if="previewError" class="preview-error" role="alert">{{ previewError }}</div>
       <div v-if="selectedListing" class="listing-backdrop" @click.self="closeListing">

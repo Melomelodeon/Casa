@@ -9,9 +9,9 @@
           </a>
 
           <div class="nav-links">
-            <a href="/browse">Explore stays</a>
-            <a href="#how-it-works">How it works</a>
-            <a href="/signup?role=landlord">Become a host</a>
+            <a v-if="!isHost" href="/browse">Explore stays</a>
+            <button class="how-it-works-button" type="button" @click="openTutorial">How it works</button>
+            <a v-if="!isHost" href="/signup?role=landlord">Become a host</a>
           </div>
 
           <div class="nav-actions">
@@ -39,7 +39,7 @@
               Discover thoughtfully chosen bedspaces and boarding houses made for the way you live.
             </p>
 
-            <form class="search-card" data-reveal @submit.prevent="searchListings">
+            <form v-if="!isHost" class="search-card" data-reveal @submit.prevent="searchListings">
               <label class="search-field">
                 <ion-icon :icon="locationOutline" />
                 <span>
@@ -79,7 +79,7 @@
           </div>
         </section>
 
-        <section id="explore" class="discover-section" aria-labelledby="discover-title">
+        <section v-if="!isHost" id="explore" class="discover-section" aria-labelledby="discover-title">
           <div class="section-heading" data-reveal>
             <div>
               <div class="eyebrow"><span class="eyebrow-line" /> HANDPICKED FOR YOU</div>
@@ -119,6 +119,35 @@
           <div class="trust-item" data-reveal><span class="trust-icon"><ion-icon :icon="chatbubbleEllipsesOutline" /></span><span><strong>Real support</strong><small>We’re here when you need us.</small></span></div>
         </section>
       </main>
+      <dialog v-if="showTutorial" ref="tutorialDialog" class="tutorial-dialog"
+        aria-labelledby="tutorial-title" aria-describedby="tutorial-description"
+        @click="closeTutorialOnBackdrop" @close="handleTutorialClose">
+        <header class="tutorial-header">
+          <div>
+            <span class="eyebrow">YOUR CASA, STEP BY STEP</span>
+            <h2 id="tutorial-title">How it works</h2>
+          </div>
+          <button class="tutorial-close" type="button" aria-label="Close tutorial" @click="closeTutorial">×</button>
+        </header>
+        <div class="tutorial-content">
+          <p id="tutorial-description">Finding a space and sending a booking request is simple.</p>
+          <ol class="tutorial-steps">
+            <li>
+              <strong>Explore spaces</strong>
+              <p>Search by area, compare options, and check the room or bedspace details.</p>
+            </li>
+            <li>
+              <strong>Send a request</strong>
+              <p>Choose your space and move-in date, then share your contact details with the host.</p>
+            </li>
+            <li>
+              <strong>Follow your booking</strong>
+              <p>Review checkout details and track the request in My bookings. A request is not confirmed until the host approves it.</p>
+            </li>
+          </ol>
+          <button class="tutorial-done" type="button" @click="closeTutorial">Got it</button>
+        </div>
+      </dialog>
     </ion-content>
   </ion-page>
 </template>
@@ -130,7 +159,7 @@ import {
   IonPage,
   onIonViewWillEnter,
 } from '@ionic/vue';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   arrowForwardOutline,
@@ -151,9 +180,13 @@ const { user } = useAuthUser();
 const { listings, isLoading, error: listingsError, loadListings } = usePublishedListings();
 const router = useRouter();
 const homeShell = ref<HTMLElement | null>(null);
+const tutorialDialog = ref<HTMLDialogElement | null>(null);
+const tutorialDialogOpener = ref<HTMLElement | null>(null);
+const showTutorial = ref(false);
 const locationSearch = ref('');
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/client');
+const isHost = computed(() => user.value?.user_metadata?.role === 'landlord');
 const stays = computed(() => getRandomHighlyRatedListings(listings.value));
 let revealObserver: IntersectionObserver | undefined;
 
@@ -196,6 +229,25 @@ function searchListings() {
 function openStay(stay: Listing) {
   void router.push({ name: 'Browse', query: { search: stay.name } });
 }
+
+function openTutorial(event: MouseEvent) {
+  tutorialDialogOpener.value = event.currentTarget as HTMLElement;
+  showTutorial.value = true;
+  void nextTick(() => tutorialDialog.value?.showModal());
+}
+
+function closeTutorial() {
+  tutorialDialog.value?.close();
+}
+
+function closeTutorialOnBackdrop(event: MouseEvent) {
+  if (event.target === tutorialDialog.value) closeTutorial();
+}
+
+function handleTutorialClose() {
+  showTutorial.value = false;
+  tutorialDialogOpener.value?.focus();
+}
 </script>
 
 <style scoped>
@@ -222,6 +274,8 @@ function openStay(stay: Listing) {
 .nav-links { display: flex; gap: 34px; margin-left: auto; margin-right: 26px; }
 .nav-links a, .login-button { color: #587065; font-size: 13px; font-weight: 600; text-decoration: none; }
 .nav-links a:hover, .login-button:hover { color: #e2743e; }
+.how-it-works-button { padding: 0; color: #587065; background: transparent; font-size: 13px; font-weight: 600; }
+.how-it-works-button:hover { color: #e2743e; }
 .nav-actions { display: flex; align-items: center; gap: 18px; }
 button { border: 0; cursor: pointer; font: inherit; }
 .login-button { background: transparent; }
@@ -273,6 +327,19 @@ h1 em, h2 em { color: #e2743e; font-weight: 600; }
 .stay-details { padding: 15px 17px 17px; }.stay-title-row { align-items: center; display: flex; justify-content: space-between; }.stay-title-row h3 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 18px; margin: 0; }.stay-rating { align-items: center; color: #174b35; display: flex; font-size: 11px; font-weight: 700; gap: 3px; }.stay-rating ion-icon { color: #e2743e; font-size: 14px; }.stay-details p { color: #87928a; font-size: 11px; margin: 6px 0 18px; }.stay-footer { align-items: end; border-top: 1px solid #eff0ec; display: flex; justify-content: space-between; padding-top: 13px; }.stay-footer strong { color: #e2743e; font-size: 16px; }.stay-footer small { color: #89938c; font-size: 10px; font-weight: 400; }.stay-footer span { color: #829088; font-size: 10px; }
 .stay-message { color: #718078; font-size: 13px; line-height: 1.6; margin: 0 0 28px; }.stay-error button { background: transparent; color: #174b35; cursor: pointer; font: inherit; font-weight: 700; margin-left: 6px; text-decoration: underline; }
 .trust-strip { align-items: center; background: #174b35; border-radius: 15px; color: white; display: grid; gap: 20px; grid-template-columns: 1.1fr repeat(3, 1fr); padding: 24px 30px; }.trust-intro { align-items: center; display: flex; gap: 14px; }.trust-intro strong { font-family: 'Playfair Display', serif; font-size: 20px; line-height: 1.1; }.mini-sparkle { color: #f4b568; font-size: 28px; }.trust-item { align-items: center; border-left: 1px solid rgba(255,255,255,.2); display: flex; gap: 11px; padding-left: 22px; }.trust-icon { align-items: center; background: rgba(255,255,255,.12); border-radius: 50%; color: #f5b66f; display: flex; font-size: 19px; height: 38px; justify-content: center; width: 38px; }.trust-item span:last-child { display: flex; flex-direction: column; }.trust-item strong { font-size: 11px; }.trust-item small { color: #b8c9bf; font-size: 9px; margin-top: 4px; }
+.tutorial-dialog { width: min(560px, calc(100% - 32px)); max-height: min(86vh, 680px); padding: 0; border: 0; border-radius: 16px; color: #174b35; background: #fff; box-shadow: 0 24px 70px rgba(23,75,53,.28); }
+.tutorial-dialog::backdrop { backdrop-filter: blur(3px); background: rgba(15,35,25,.58); }
+.tutorial-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 26px 16px; border-bottom: 1px solid #e8eee7; }
+.tutorial-header h2 { margin: 8px 0 0; font-family: 'Playfair Display', Georgia, serif; font-size: 30px; letter-spacing: -1px; }
+.tutorial-close { display: grid; width: 35px; height: 35px; place-items: center; border-radius: 50%; color: #174b35; background: #f0f3ee; font-size: 24px; line-height: 1; }
+.tutorial-content { overflow-y: auto; padding: 18px 26px 24px; }
+.tutorial-content > p { margin: 0 0 18px; color: #68786e; font-size: 13px; line-height: 1.6; }
+.tutorial-steps { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; counter-reset: tutorial-step; }
+.tutorial-steps li { position: relative; padding: 14px 16px 14px 52px; border: 1px solid #e8eee7; border-radius: 10px; background: #fbfcfa; counter-increment: tutorial-step; }
+.tutorial-steps li::before { position: absolute; top: 14px; left: 15px; display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: #fff; background: #20583c; content: counter(tutorial-step); font-size: 12px; font-weight: 700; }
+.tutorial-steps strong { color: #174b35; font-size: 13px; }
+.tutorial-steps p { margin: 5px 0 0; color: #718078; font-size: 12px; line-height: 1.55; }
+.tutorial-done { display: block; min-height: 40px; margin: 18px 0 0 auto; padding: 0 18px; border-radius: 8px; color: #fff; background: #20583c; font-size: 12px; font-weight: 700; }
 @media (max-width: 900px) { .home-shell { padding: 0 24px 40px; }.nav-links { gap: 15px; margin-right: 0; }.hero-section { grid-template-columns: 55% 45%; }.search-button { justify-content: center; }.hero-image { height: 330px; width: 240px; }.sun-shape { height: 280px; width: 280px; }.trust-strip { grid-template-columns: repeat(2, 1fr); }.trust-intro { grid-column: span 2; }.trust-item:nth-child(3) { border-left: 0; } }
 @media (max-width: 620px) { .home-shell { padding: 0 18px 35px; }.nav-bar { height: 75px; }.nav-links, .login-button { display: none; }.menu-button { display: flex; }.hero-section { display: flex; flex-direction: column; padding: 39px 0 55px; }.hero-copy { display: flex; flex-direction: column; }.hero-section h1 { font-size: 56px; }.hero-description { font-size: 14px; }.search-card { display: grid; grid-template-columns: 1fr auto; padding: 8px; }.search-field { border-bottom: 0; min-width: 0; padding: 11px 7px; }.search-button { grid-column: 2; margin: 0; width: auto; }.hero-visual { min-height: 365px; margin-top: 30px; }.hero-image { height: 330px; width: 250px; }.floating-rating { left: 2px; top: 37px; }.floating-location { bottom: 27px; right: 0; }.section-heading { align-items: start; flex-direction: column; gap: 20px; }.section-heading h2 { font-size: 37px; }.stay-grid { grid-template-columns: 1fr; }.stay-image { height: 230px; }.trust-strip { display: flex; flex-direction: column; align-items: stretch; padding: 25px; }.trust-intro { margin-bottom: 7px; }.trust-item { border-left: 0; border-top: 1px solid rgba(255,255,255,.2); padding: 15px 0 0; }.trust-item:nth-child(3) { border-top: 1px solid rgba(255,255,255,.2); } }
 @media (prefers-reduced-motion: reduce) { [data-reveal] { transition: none; } }

@@ -44,6 +44,7 @@
             <div class="section-heading"><div><span class="eyebrow">LISTING MANAGEMENT</span><h2>Quick actions</h2></div></div>
             <a class="quick-action" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Create a listing <ion-icon :icon="arrowForwardOutline" /></a>
             <a class="quick-action" href="/host/spaces"><ion-icon :icon="homeOutline" /> Manage your listings <ion-icon :icon="arrowForwardOutline" /></a>
+            <a class="quick-action" href="/host/requests"><ion-icon :icon="chatbubbleEllipsesOutline" /> Manage booking requests <ion-icon :icon="arrowForwardOutline" /></a>
           </section>
         </div>
 
@@ -78,7 +79,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import { useRouter } from 'vue-router';
-import { addOutline, arrowForwardOutline, bedOutline, checkmarkCircleOutline, homeOutline, locationOutline, lockClosedOutline } from 'ionicons/icons';
+import { addOutline, arrowForwardOutline, bedOutline, chatbubbleEllipsesOutline, checkmarkCircleOutline, homeOutline, locationOutline, lockClosedOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
 import { useAuthUser } from '../composables/useAuthUser';
 import { defaultListingImage } from '../data/listings';
@@ -269,7 +270,7 @@ watch([spaces, isLoading, errorMessage, availabilityError], observeRevealElement
 .data-message { color: #849087; font-size: 12px; margin: 18px 0 0; }
 .error-message { background: #fff0e8; border-radius: 7px; color: #a4472a; padding: 12px 14px; }
 .quick-actions-card { display: flex; flex-direction: column; gap: 14px; }
-.quick-action { align-items: center; border-top: 1px solid #edf1ec; color: #35744a; display: flex; font-size: 11px; font-weight: 600; gap: 9px; padding-top: 14px; text-decoration: none; }
+.quick-action { align-items: center; border-top: 1px solid #edf1ec; color: #35744a; display: flex; font-size: 11px; font-weight: 600; gap: 9px; min-height: 44px; padding-top: 14px; text-decoration: none; }
 .quick-action ion-icon:first-child { font-size: 17px; }
 .quick-action ion-icon:last-child { color: #e2743e; margin-left: auto; }
 .empty-state { align-items: center; background: #fff; border: 1px dashed #d7e1d7; border-radius: 11px; display: flex; flex-direction: column; margin-top: 17px; padding: 38px 20px; text-align: center; }
@@ -281,7 +282,43 @@ watch([spaces, isLoading, errorMessage, availabilityError], observeRevealElement
 .live-badge.draft i { background: #c6a45e; }
 .space-footer a { color: #e2743e; font-size: 10px; font-weight: 700; text-decoration: none; }
 @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); }.dashboard-grid { grid-template-columns: 1fr; }.host-nav { gap: 16px; } }
-@media (max-width: 620px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account a { display: none; }.host-shell { padding: 38px 18px 55px; }.welcome-row { align-items: start; flex-direction: column; gap: 22px; }.welcome-row h1 { font-size: 39px; }.add-button { align-self: stretch; justify-content: center; }.stats-grid, .space-grid { grid-template-columns: 1fr; }.stat-card { padding: 14px; }.dashboard-card { padding: 18px 15px; }.request-row { align-items: start; flex-wrap: wrap; }.request-actions { margin-left: 44px; width: calc(100% - 44px); }.request-actions button { flex: 1; }.space-photo { height: 210px; } }
+@media (max-width: 620px) {
+  .host-header { height: 70px; gap: 10px; padding: 0 16px; }
+  .brand { font-size: 23px; }
+  .brand-mark { height: 31px; width: 31px; }
+  .host-nav { display: none; }
+  .host-account { gap: 7px; }
+  .host-name, .host-account a { display: none; }
+  .host-account button { margin-left: 0; }
+  .host-shell { padding: 32px 16px 48px; }
+  .welcome-row { align-items: start; flex-direction: column; gap: 18px; }
+  .welcome-row > div:first-child { min-width: 0; max-width: 100%; }
+  .welcome-row h1 { font-size: clamp(30px, 8vw, 39px); letter-spacing: -1.5px; line-height: 1.1; overflow-wrap: anywhere; }
+  .welcome-row p { line-height: 1.5; }
+  .add-button { align-self: stretch; justify-content: center; min-height: 44px; }
+  .stats-grid, .space-grid { grid-template-columns: 1fr; }
+  .stats-grid { gap: 10px; margin-top: 25px; }
+  .stat-card { min-width: 0; padding: 14px; }
+  .stat-card div { min-width: 0; }
+  .dashboard-grid { gap: 14px; margin-top: 20px; }
+  .dashboard-card { min-width: 0; padding: 18px 15px; }
+  .section-heading h2 { font-size: 21px; }
+  .occupancy-bar { margin-top: 20px; }
+  .legend { flex-wrap: wrap; gap: 10px 16px; margin-top: 20px; }
+  .quick-actions-card { gap: 10px; }
+  .quick-action { padding-top: 12px; }
+  .spaces-section { margin-top: 28px; }
+  .spaces-section > .section-heading { align-items: center; gap: 10px; }
+  .space-grid { gap: 14px; }
+  .space-photo { height: 200px; }
+  .space-card-body { padding: 15px; }
+  .space-title { flex-direction: column; gap: 9px; }
+  .space-title > div { min-width: 0; }
+  .space-title h3 { overflow-wrap: anywhere; }
+  .space-title strong { align-self: flex-start; }
+  .space-footer { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+  .space-footer .manage-link { margin-left: auto; }
+}
 @media (prefers-reduced-motion: reduce) { .host-page [data-reveal] { transition: none; } }
 .add-button { text-decoration: none; }
 </style>

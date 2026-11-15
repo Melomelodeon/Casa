@@ -378,7 +378,49 @@ watch([filteredSpaces, isLoading, errorMessage, notice, availabilityError], obse
 .preview-heading > strong small { color: #89968d; font-size: 9px; font-weight: 400; }
 .preview-description { color: #829088; font-size: 11px; line-height: 1.5; margin: 14px 0; }
 @media (max-width: 900px) { .host-nav { gap: 16px; }.space-grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account a { display: none; }.host-shell { padding: 38px 18px 55px; }.page-heading { align-items: start; flex-direction: column; gap: 22px; }.page-heading .primary-button { align-self: stretch; justify-content: center; }.toolbar { align-items: stretch; flex-direction: column; }.toolbar select { width: 100%; }.space-actions { flex-wrap: wrap; }.space-actions button { min-width: calc(50% - 4px); }.preview-backdrop { align-items: end; padding: 0; }.preview-dialog { border-radius: 14px 14px 0 0; max-height: 94vh; }.preview-cover { height: 150px; }.preview-content { padding: 15px 14px 22px; }.preview-heading { gap: 10px; }.delete-dialog { padding: 23px 18px; }.delete-dialog-actions { flex-direction: column-reverse; } }
+@media (max-width: 620px) {
+  .host-header { height: 70px; gap: 10px; padding: 0 16px; }
+  .brand { font-size: 23px; }
+  .brand-mark { height: 31px; width: 31px; }
+  .host-nav { display: none; }
+  .host-account { gap: 7px; }
+  .host-name, .host-account a { display: none; }
+  .host-account button { margin-left: 0; }
+  .host-shell { padding: 32px 16px 48px; }
+  .page-heading { align-items: start; flex-direction: column; gap: 17px; }
+  .page-heading > div { max-width: 100%; min-width: 0; }
+  .page-heading h1 { font-size: clamp(32px, 9vw, 42px); letter-spacing: -1.5px; overflow-wrap: anywhere; }
+  .page-heading p { line-height: 1.5; }
+  .page-heading .primary-button { align-self: stretch; justify-content: center; min-height: 44px; }
+  .toolbar { align-items: stretch; flex-direction: column; gap: 10px; margin: 24px 0 20px; }
+  .search-box { min-height: 44px; min-width: 0; }
+  .search-box input { min-width: 0; width: 100%; }
+  .toolbar select { min-height: 44px; width: 100%; }
+  .space-grid { gap: 14px; }
+  .space-photo { height: 185px; }
+  .space-body { padding: 15px; }
+  .space-title { flex-direction: column; gap: 9px; }
+  .space-title > div { min-width: 0; }
+  .space-title h2 { font-size: 19px; overflow-wrap: anywhere; }
+  .space-title span { line-height: 1.4; overflow-wrap: anywhere; }
+  .space-title strong { align-self: flex-start; background: #e5f1e4; border-radius: 12px; padding: 5px 8px; }
+  .space-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+  .space-stats span { min-width: 0; }
+  .space-stats span:last-child { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; }
+  .space-stats small { line-height: 1.35; }
+  .space-stats b { overflow-wrap: anywhere; }
+  .space-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .space-actions button { min-height: 44px; min-width: 0; padding: 9px 6px; }
+  .preview-backdrop { align-items: end; padding: 0; }
+  .preview-dialog { border-radius: 14px 14px 0 0; max-height: 94vh; }
+  .preview-cover { height: 150px; }
+  .preview-content { padding: 15px 14px 22px; }
+  .preview-heading { flex-direction: column; gap: 10px; }
+  .preview-heading > div { min-width: 0; }
+  .preview-heading h2 { font-size: 21px; overflow-wrap: anywhere; }
+  .delete-dialog { padding: 23px 18px; }
+  .delete-dialog-actions { flex-direction: column-reverse; }
+}
 @media (prefers-reduced-motion: reduce) { .preview-enter-active, .preview-leave-active, .preview-enter-active .preview-dialog, .preview-leave-active .preview-dialog, .delete-confirm-enter-active, .delete-confirm-leave-active, .delete-confirm-enter-active .delete-dialog, .delete-confirm-leave-active .delete-dialog { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .space-card.focused-space { animation: none; box-shadow: 0 0 0 4px #e2743e80, 0 12px 24px #174b3530; } }
 .host-page [data-reveal] { transition: opacity .65s ease, transform .65s cubic-bezier(.2, .7, .2, 1); }

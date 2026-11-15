@@ -14,21 +14,21 @@
           <button type="submit" aria-label="Search"><ion-icon :icon="arrowForwardOutline" /></button>
         </form>
         <nav class="header-actions" aria-label="Account navigation">
-          <a href="/listings">Browse all listings</a>
-          <a href="/signup?role=landlord">List your space</a>
+          <a class="browse-listings-link" href="/listings">Browse listings</a>
           <template v-if="user">
-            <a class="profile-button" :href="accountPath"><ion-icon :icon="personOutline" /> {{ displayName }}</a>
+            <a class="profile-button" :href="accountPath" :aria-label="`${displayName} account`">
+              <ion-icon :icon="personOutline" /><span class="profile-name">{{ displayName }}</span>
+            </a>
             <button class="logout-button" type="button" @click="logout">Log out</button>
           </template>
-          <a v-else class="profile-button" href="/login?role=tenant"><ion-icon :icon="personOutline" /> Log in</a>
-          <button class="mobile-filter-button" type="button" @click="showFilters = !showFilters"><ion-icon
-              :icon="optionsOutline" /></button>
+          <a v-else class="profile-button" href="/login?role=tenant" aria-label="Log in">
+            <ion-icon :icon="personOutline" /><span class="profile-name">Log in</span>
+          </a>
         </nav>
       </header>
 
       <main class="browse-layout">
-        <section ref="listingsPanel" class="listings-panel" :class="{ 'filters-open': showFilters }"
-          @scroll.passive="revealVisibleElements">
+        <section ref="listingsPanel" class="listings-panel" @scroll.passive="revealVisibleElements">
           <div class="results-top" data-reveal>
             <div>
               <span class="eyebrow">EXPLORE THE MAP</span>
@@ -166,7 +166,6 @@ import {
   homeOutline,
   informationCircleOutline,
   locationOutline,
-  optionsOutline,
   personOutline,
   searchOutline,
   shieldCheckmarkOutline,
@@ -200,7 +199,6 @@ const hasScrollableContent = ref(false);
 const scrollIndicatorDismissed = ref(false);
 let selectedListingResizeObserver: ResizeObserver | null = null;
 const favorites = ref(new Set<number>());
-const showFilters = ref(false);
 const showMapNotice = ref(false);
 let leafletMap: LeafletMap | null = null;
 let listingMarkerLayer: L.MarkerClusterGroup | null = null;
@@ -693,10 +691,6 @@ function clearFilters() {
 .profile-button ion-icon {
   color: #e2743e;
   font-size: 16px;
-}
-
-.mobile-filter-button {
-  display: none;
 }
 
 .browse-layout {
@@ -1232,6 +1226,7 @@ function clearFilters() {
   min-height: 0;
   min-width: 0;
   position: relative;
+  z-index: 0;
 }
 
 .map-container {
@@ -1450,33 +1445,47 @@ function clearFilters() {
   }
 
   .browse-header {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     height: auto;
-    padding: 16px 18px;
+    gap: 12px;
+    padding: 12px 16px;
   }
 
   .search-bar {
-    flex: 1 0 100%;
-    margin: 14px 0 0;
+    grid-column: 1 / -1;
+    margin: 0;
     max-width: none;
-    order: 3;
+    width: 100%;
   }
 
   .header-actions {
     margin-left: auto;
+    min-width: 0;
+    gap: 7px;
+    justify-content: flex-end;
   }
 
-  .header-actions>a:first-child {
-    display: none;
+  .browse-listings-link {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid #dfe6df;
+    border-radius: 18px;
+    font-size: 10px;
   }
 
-  .mobile-filter-button {
-    background: #eaf1e8;
-    border-radius: 50%;
-    color: #174b35;
-    display: flex;
-    font-size: 18px;
-    padding: 9px;
+  .profile-button {
+    max-width: 120px;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .profile-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .browse-layout {
@@ -1515,11 +1524,28 @@ function clearFilters() {
   }
 
   .listing-card {
-    grid-template-columns: 125px 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .listing-image {
-    min-height: 170px;
+    height: 180px;
+    min-height: 180px;
+  }
+
+  .listing-info {
+    padding: 14px 15px;
+  }
+
+  .listing-title-row h2 {
+    overflow-wrap: anywhere;
+  }
+
+  .listing-meta {
+    min-width: 0;
+  }
+
+  .listing-meta strong {
+    white-space: nowrap;
   }
 
   .listing-meta span:nth-child(2),
@@ -1535,8 +1561,26 @@ function clearFilters() {
 
 @media (max-width: 400px) {
 
+  .browse-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .profile-button {
+    padding: 8px;
+  }
+
+  .profile-name {
+    display: none;
+  }
+
   .listing-card {
-    grid-template-columns: 105px 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .listing-info {

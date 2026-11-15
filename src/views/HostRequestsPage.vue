@@ -430,7 +430,56 @@ watch([filteredRequests, isLoading, errorMessage, notice], observeRevealElements
 .ticket-serial { margin-top: 5px; color: #354d3e; font-family: monospace; font-size: 13px; letter-spacing: 1px; }
 @keyframes refund-wind-sweep { 0% { opacity: 0; transform: translateX(0) rotate(-8deg); } 25% { opacity: .9; } 100% { opacity: 0; transform: translateX(180vw) rotate(-8deg); } }
 @keyframes refund-ticket-arrive { 0%, 12% { opacity: 0; transform: translateY(12px) scale(.96); } 25%, 78% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-8px) scale(1.02); } }
-@media (max-width: 700px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account a { display: none; }.host-shell { padding: 38px 18px 55px; }.page-heading { align-items: start; flex-direction: column; gap: 22px; }.request-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }.tabs { gap: 14px; overflow-x: auto; }.request-toolbar select { margin: 0; }.request-card { padding: 17px 15px; }.request-status { margin-left: auto; }.request-info { gap: 10px; }.request-info strong { font-size: 10px; }.request-actions { align-items: stretch; flex-wrap: wrap; }.request-actions button { flex: 1; }.view-profile { flex: 0 0 100% !important; margin-left: 0; } }
+@media (max-width: 700px) {
+  .host-header { height: 70px; gap: 10px; padding: 0 16px; }
+  .brand { font-size: 23px; }
+  .brand-mark { height: 31px; width: 31px; }
+  .host-nav { display: none; }
+  .host-account { gap: 7px; }
+  .host-name, .host-account a { display: none; }
+  .host-account button { margin-left: 0; }
+  .host-shell { padding: 32px 16px 48px; }
+  .page-heading { align-items: start; flex-direction: column; gap: 14px; }
+  .page-heading > div { max-width: 100%; min-width: 0; }
+  .back-link { margin-bottom: 16px; }
+  .page-heading h1 { font-size: clamp(36px, 10vw, 46px); letter-spacing: -1.5px; line-height: 1.05; }
+  .page-heading p { line-height: 1.5; }
+  .pending-summary { align-self: flex-start; padding: 7px 10px; border-radius: 18px; background: #fff0e8; }
+  .pending-summary strong { font-size: 20px; }
+  .request-toolbar { align-items: stretch; flex-direction: column; gap: 10px; margin: 26px 0 18px; border: 0; }
+  .tabs { max-width: 100%; gap: 16px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; touch-action: pan-x; border-bottom: 1px solid #dfe8de; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 0 0 auto; min-height: 44px; padding: 8px 0 10px; border: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .tabs button.active { border-bottom-color: #e2743e; }
+  .request-toolbar select { width: 100%; min-height: 44px; margin: 0; padding: 10px 12px; }
+  .request-card { padding: 16px 14px; }
+  .request-top { display: grid; grid-template-columns: 42px minmax(0, 1fr); column-gap: 11px; row-gap: 5px; }
+  .request-avatar { grid-column: 1; grid-row: 1 / span 2; }
+  .request-person { grid-column: 2; min-width: 0; }
+  .request-person h2 { font-size: 17px; overflow-wrap: anywhere; }
+  .request-status { grid-column: 2; justify-self: start; max-width: 100%; margin: 3px 0 0; white-space: normal; }
+  .request-info { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; margin: 14px 0 12px; padding: 12px 0; }
+  .request-info div { min-width: 0; }
+  .request-info div:last-child { grid-column: 1 / -1; }
+  .request-info strong, .request-info a { font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+  .request-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 8px; }
+  .request-actions button { min-height: 44px; padding: 9px 8px; }
+  .request-actions button:only-child { grid-column: 1 / -1; }
+  .request-actions.refund-actions { grid-template-columns: 1fr; }
+  .view-profile { grid-column: 1 / -1; margin-left: 0; }
+  .message { overflow-wrap: anywhere; }
+  .resolved-note { align-items: flex-start; line-height: 1.5; overflow-wrap: anywhere; }
+  .end-tenancy-backdrop { align-items: flex-end; padding: 0; }
+  .end-tenancy-dialog { max-height: 90dvh; overflow-y: auto; padding: 24px 18px max(20px, env(safe-area-inset-bottom)); border-radius: 14px 14px 0 0; }
+  .end-tenancy-actions { flex-direction: column; }
+  .end-tenancy-actions button { min-height: 44px; width: 100%; }
+  .refund-dialog { width: 100%; max-width: none; max-height: 82dvh; padding: 20px 18px max(20px, env(safe-area-inset-bottom)); text-align: left; }
+  .refund-dialog .refund-dialog-icon { margin: 0 0 12px; }
+  .refund-dialog h2 { font-size: 22px; }
+  .refund-dialog > p { font-size: 13px; line-height: 1.55; margin-bottom: 12px; }
+  .refund-dialog .end-tenancy-actions { gap: 8px; margin-top: 18px; }
+  .refund-dialog .confirm-refund { min-height: 46px; }
+}
 .host-page [data-reveal] { transition: opacity .65s ease, transform .65s cubic-bezier(.2, .7, .2, 1); }
 .host-page--revealing [data-reveal]:not(.is-revealed) { opacity: 0; transform: translateY(18px); }
 .host-page--revealing [data-reveal].is-revealed { opacity: 1; }

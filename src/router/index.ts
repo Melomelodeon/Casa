@@ -38,30 +38,32 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/browse',
     name: 'Browse',
-    component: BrowsePage
+    component: BrowsePage,
+    meta: { disallowLandlord: true }
   },
   {
     path: '/listings',
     name: 'Listings',
-    component: ListingsPage
+    component: ListingsPage,
+    meta: { disallowLandlord: true }
   },
   {
     path: '/checkout',
     name: 'Checkout',
     component: CheckoutPage,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, disallowLandlord: true }
   },
   {
     path: '/payment',
     name: 'Payment',
     component: PaymentPage,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, disallowLandlord: true }
   },
   {
     path: '/receipt',
     name: 'Receipt',
     component: ReceiptPage,
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true, disallowLandlord: true }
   },
   {
     path: '/client',
@@ -106,7 +108,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (!to.meta.requiresAuth && !to.meta.requiresLandlord && !to.meta.requiresTenant) {
+  if (!to.meta.requiresAuth && !to.meta.requiresLandlord && !to.meta.requiresTenant && !to.meta.disallowLandlord) {
     return true
   }
 
@@ -118,6 +120,10 @@ router.beforeEach(async (to) => {
     }
 
     const role = user.user_metadata?.role
+
+    if (to.meta.disallowLandlord && role === 'landlord') {
+      return { name: 'HostDashboard' }
+    }
 
     if (to.meta.requiresLandlord && role !== 'landlord') {
       return role === 'tenant' ? { name: 'ClientDashboard' } : { name: 'Browse' }

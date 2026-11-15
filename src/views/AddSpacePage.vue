@@ -2356,34 +2356,154 @@ fieldset legend {
 @media (max-width: 700px) {
   .host-header {
     height: 70px;
-    padding: 0 18px;
+    gap: 10px;
+    padding: 0 16px;
+  }
+
+  .brand {
+    font-size: 23px;
+  }
+
+  .brand-mark {
+    height: 31px;
+    width: 31px;
   }
 
   .host-nav {
     display: none;
   }
 
-  .host-name,
-  .host-account button {
+  .host-account {
+    gap: 7px;
+  }
+
+  .host-name {
     display: none;
   }
 
+  .host-account button {
+    margin-left: 0;
+  }
+
   .host-shell {
-    padding: 38px 18px 55px;
+    padding: 30px 16px 48px;
+  }
+
+  .back-link {
+    margin-bottom: 17px;
   }
 
   .page-heading {
     align-items: start;
     flex-direction: column;
-    gap: 22px;
+    gap: 12px;
+  }
+
+  .page-heading > div {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .page-heading h1 {
+    font-size: clamp(34px, 9vw, 44px);
+    letter-spacing: -1.5px;
+    overflow-wrap: anywhere;
+  }
+
+  .page-heading p {
+    line-height: 1.5;
+  }
+
+  .step-label {
+    align-self: flex-start;
+    padding: 7px 10px;
+    border-radius: 16px;
+    background: #fff0e8;
+  }
+
+  .listing-form {
+    gap: 14px;
+    margin-top: 24px;
   }
 
   .form-card {
-    padding: 19px 16px;
+    padding: 19px 15px;
+  }
+
+  .section-heading {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .section-heading h2 {
+    font-size: 20px;
+  }
+
+  .section-heading p {
+    line-height: 1.5;
+  }
+
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .location-picker-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .use-location-button {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .location-map {
+    height: 240px;
+  }
+
+  .floor-selector button,
+  .room-selector button {
+    min-height: 42px;
+  }
+
+  .floor-selector .add-floor-button,
+  .room-selector .add-floor-button {
+    flex: 1 0 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .photo-dropzone {
+    min-height: 160px;
+    padding: 18px 12px;
+  }
+
+  .photo-dropzone strong {
+    overflow-wrap: anywhere;
+  }
+
+  .grid-size-fields {
+    max-width: none;
+  }
+
+  .door-controls button {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .grid-preview-wrap {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
 
   .bedspace-dialog {
-    padding: 19px 16px;
+    max-height: 92dvh;
+    overflow-y: auto;
+    padding: 19px 16px max(20px, env(safe-area-inset-bottom));
+    width: 100%;
+    border-radius: 16px 16px 0 0;
   }
 
   .bedspace-dialog .field-grid {
@@ -2392,21 +2512,73 @@ fieldset legend {
 
   .form-actions {
     align-items: stretch;
+    gap: 9px;
   }
 
-  .submit-button {
+  .form-actions .back-form-button,
+  .form-actions .submit-button {
+    min-height: 46px;
+  }
+
+  .form-actions .back-form-button {
+    flex: 0 0 auto;
+  }
+
+  .form-actions .submit-button {
+    flex: 1;
     justify-content: center;
-    width: 100%;
+    min-width: 0;
+    width: auto;
+  }
+
+  .publish-hint {
+    justify-content: flex-start;
+    line-height: 1.5;
   }
 
   .success-card {
     align-items: start;
     flex-wrap: wrap;
-    padding: 20px;
+    gap: 14px;
+    margin-top: 24px;
+    padding: 18px;
   }
 
   .success-card a {
-    margin-left: 63px;
+    min-height: 44px;
+    margin-left: 0;
+  }
+
+  .dialog-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .confirmation-dialog {
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: 24px 18px max(20px, env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+  }
+
+  .dialog-actions {
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .dialog-actions button {
+    min-height: 44px;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .bedspace-dialog .dialog-actions {
+    flex-direction: column;
+  }
+
+  .submit-error,
+  .bunk-tip {
+    line-height: 1.5;
   }
 }
 

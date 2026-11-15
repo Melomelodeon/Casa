@@ -13,7 +13,10 @@
       <main class="client-shell" :class="{ 'page-enter': shouldAnimate }">
         <section class="welcome-row">
           <div><span class="eyebrow">YOUR CASA ACCOUNT</span><h1>My bookings<span class="heading-dot">.</span></h1><p>Keep track of your requests and upcoming stays.</p></div>
-          <a class="browse-button" href="/listings"><ion-icon :icon="searchOutline" /> Find a space</a>
+          <div class="client-cta-group">
+            <a class="browse-button" href="/listings"><ion-icon :icon="searchOutline" /> Find a space</a>
+            <button ref="listSpaceButton" class="list-space-button" type="button" @click="openListSpaceNotice">List your space</button>
+          </div>
         </section>
 
         <section class="summary-grid" aria-label="Booking summary">
@@ -173,6 +176,24 @@
       <div v-if="confettiBookingId !== null" class="confetti-burst" aria-hidden="true">
         <span v-for="piece in confettiPieces" :key="piece" class="confetti-piece" :style="{ left: `${(piece * 37) % 101}%`, animationDelay: `${(piece % 6) * 0.06}s` }" />
       </div>
+      <dialog v-if="showListSpaceNotice" ref="listSpaceDialog" class="list-space-dialog"
+        aria-labelledby="list-space-title" aria-describedby="list-space-description"
+        @click="closeListSpaceNoticeOnBackdrop" @close="handleListSpaceNoticeClose">
+        <header class="list-space-dialog-header">
+          <div>
+            <span class="eyebrow">BECOME A HOST</span>
+            <h2 id="list-space-title">Use a separate account</h2>
+          </div>
+          <button class="list-space-close" type="button" aria-label="Close notice" @click="closeListSpaceNotice">×</button>
+        </header>
+        <div class="list-space-dialog-content">
+          <p id="list-space-description">Your client account can’t be used to list a space. To continue, sign up for a separate host account with a different email address.</p>
+          <div class="list-space-dialog-actions">
+            <button class="list-space-cancel" type="button" @click="closeListSpaceNotice">Not now</button>
+            <a class="list-space-continue" href="/signup?role=landlord">Continue to sign up</a>
+          </div>
+        </div>
+      </dialog>
     </ion-content>
   </ion-page>
 </template>
@@ -180,7 +201,7 @@
 <script setup lang="ts">
 import { onIonViewWillEnter } from '@ionic/vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
-import { computed, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onUnmounted, ref } from 'vue';
 import { alertCircleOutline, searchOutline, star } from 'ionicons/icons';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
@@ -225,6 +246,9 @@ type ClientBooking = {
 
 const { user } = useAuthUser();
 const { logout } = useLogout();
+const listSpaceButton = ref<HTMLButtonElement | null>(null);
+const listSpaceDialog = ref<HTMLDialogElement | null>(null);
+const showListSpaceNotice = ref(false);
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Client');
 const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const bookings = ref<ClientBooking[]>([]);
@@ -258,6 +282,24 @@ const filteredBookings = computed(() => bookings.value.filter((booking) => {
   if (selectedTab.value === 'past') return booking.status === 'declined' || booking.status === 'completed' || booking.status === 'cancelled';
   return true;
 }));
+
+function openListSpaceNotice() {
+  showListSpaceNotice.value = true;
+  void nextTick(() => listSpaceDialog.value?.showModal());
+}
+
+function closeListSpaceNotice() {
+  listSpaceDialog.value?.close();
+}
+
+function closeListSpaceNoticeOnBackdrop(event: MouseEvent) {
+  if (event.target === listSpaceDialog.value) closeListSpaceNotice();
+}
+
+function handleListSpaceNoticeClose() {
+  showListSpaceNotice.value = false;
+  listSpaceButton.value?.focus();
+}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -528,6 +570,19 @@ h1, h2, h3, p { margin-top: 0; }
 .welcome-row p { margin-bottom: 0; color: #77847a; font-size: 14px; }
 .browse-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: 8px; color: #fff; background: #20583c; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
 .browse-button ion-icon { font-size: 16px; }
+.client-cta-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.list-space-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; padding: 0 16px; border: 1px solid #dfe6df; border-radius: 8px; color: #20583c; background: #fff; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.list-space-dialog { width: min(440px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 14px; color: #174b35; background: #fff; box-shadow: 0 24px 70px rgb(23 75 53 / 28%); }
+.list-space-dialog::backdrop { backdrop-filter: blur(3px); background: rgb(15 35 25 / 58%); }
+.list-space-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 22px 24px 16px; border-bottom: 1px solid #e8eee7; }
+.list-space-dialog-header h2 { margin: 8px 0 0; color: #174b35; font-family: 'Playfair Display', Georgia, serif; font-size: 23px; letter-spacing: -.5px; }
+.list-space-close { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; color: #174b35; background: #f0f3ee; font-size: 22px; line-height: 1; cursor: pointer; }
+.list-space-dialog-content { padding: 18px 24px 22px; }
+.list-space-dialog-content p { margin: 0; color: #68786e; font-size: 13px; line-height: 1.65; }
+.list-space-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; }
+.list-space-dialog-actions button, .list-space-continue { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; padding: 0 13px; border-radius: 7px; font: inherit; font-size: 11px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.list-space-cancel { border: 1px solid #e1e7e1; color: #526357; background: #fff; }
+.list-space-continue { border: 1px solid #20583c; color: #fff; background: #20583c; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 42px; }
 .summary-grid article { min-height: 96px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px solid #e7ece6; border-radius: 12px; background: #fff; }
 .summary-icon, .empty-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: #2a6947; background: #eaf3ec; font-size: 23px; }
@@ -647,6 +702,7 @@ h1, h2, h3, p { margin-top: 0; }
   .avatar { width: 30px; height: 30px; }
   .client-account button { font-size: 10px; }
   .welcome-row { align-items: flex-start; flex-direction: column; }
+  .client-cta-group { width: 100%; }
   .booking-card-top { flex-direction: column; }
 }
 @media (prefers-reduced-motion: reduce) {
