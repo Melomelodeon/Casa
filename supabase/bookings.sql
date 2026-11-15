@@ -15,7 +15,14 @@ alter table public.bookings
   add column if not exists move_in_date date,
   add column if not exists message text,
   add column if not exists amount numeric(10, 2),
+  add column if not exists refund_status text not null default 'none',
   add column if not exists receipt_token uuid;
+
+alter table public.bookings
+  drop constraint if exists bookings_refund_status_check;
+alter table public.bookings
+  add constraint bookings_refund_status_check
+  check (refund_status in ('none', 'pending', 'refunded'));
 
 alter table public.bookings
   add column if not exists rating smallint;
@@ -215,6 +222,92 @@ $$;
 
 revoke all on function public.end_tenant_booking(bigint, integer) from public;
 grant execute on function public.end_tenant_booking(bigint, integer) to authenticated;
+
+create or replace function public.request_tenant_booking_refund(p_booking_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  booking_tenant_id uuid;
+  booking_status text;
+  booking_payment_status text;
+  booking_refund_status text;
+  booking_amount numeric(10, 2);
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to request a refund.';
+  end if;
+
+  select b.tenant_id, b.request_status, b.payment_status, b.refund_status, b.amount
+  into booking_tenant_id, booking_status, booking_payment_status, booking_refund_status, booking_amount
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found or booking_tenant_id <> auth.uid() then
+    raise exception 'You do not have permission to request a refund for this booking.';
+  end if;
+
+  if booking_status <> 'cancelled' or booking_payment_status <> 'paid' or booking_refund_status <> 'none'
+    or booking_amount is null or booking_amount <= 0 then
+    raise exception 'Only a paid, cancelled booking without an existing refund request can be refunded.';
+  end if;
+
+  update public.bookings
+  set refund_status = 'pending'
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.request_tenant_booking_refund(bigint) from public;
+grant execute on function public.request_tenant_booking_refund(bigint) to authenticated;
+
+create or replace function public.issue_host_booking_refund(p_booking_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_listing_id bigint;
+  booking_status text;
+  booking_refund_status text;
+  booking_amount numeric(10, 2);
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to issue a refund.';
+  end if;
+
+  select b.listing_id, b.request_status, b.refund_status, b.amount
+  into target_listing_id, booking_status, booking_refund_status, booking_amount
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'This booking no longer exists.';
+  end if;
+
+  if not public.owns_space(target_listing_id) then
+    raise exception 'You do not have permission to issue a refund for this booking.';
+  end if;
+
+  if booking_status <> 'cancelled' or booking_refund_status <> 'pending'
+    or booking_amount is null or booking_amount <= 0 then
+    raise exception 'Only a cancelled booking with a pending refund request can be refunded.';
+  end if;
+
+  update public.bookings
+  set refund_status = 'refunded',
+      payment_status = 'refunded'
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.issue_host_booking_refund(bigint) from public;
+grant execute on function public.issue_host_booking_refund(bigint) to authenticated;
 
 create or replace function public.get_booked_listing_spaces()
 returns table(room_id bigint, bedspace_id bigint)

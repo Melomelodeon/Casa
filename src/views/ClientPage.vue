@@ -46,7 +46,7 @@
                   <h3>{{ booking.listingName }}</h3>
                   <p class="listing-location">{{ booking.location }}</p>
                 </div>
-                <span class="request-status" :class="booking.status">{{ statusLabel(booking.status) }}</span>
+                <span class="request-status" :class="[booking.status, booking.refundStatus]">{{ statusLabel(booking.status) }}</span>
               </div>
               <div class="booking-details">
                 <div><small>Space</small><strong>{{ booking.spaceName }}</strong></div>
@@ -56,6 +56,8 @@
               </div>
               <p v-if="booking.status === 'pending'" class="booking-note">Your request is waiting for the host to review it.</p>
               <p v-else-if="booking.status === 'approved'" class="booking-note approved-note">Your stay is approved. Contact the host if you need to coordinate your move-in.</p>
+              <p v-else-if="booking.status === 'cancelled' && booking.refundStatus === 'pending'" class="booking-note refund-note">Your refund request for {{ formatRefundAmount(booking.amount) }} is pending host approval.</p>
+              <p v-else-if="booking.status === 'cancelled' && booking.refundStatus === 'refunded'" class="booking-note refund-note">Your refund of {{ formatRefundAmount(booking.amount) }} has been issued.</p>
               <p v-else-if="booking.status === 'cancelled'" class="booking-note">You cancelled this request.</p>
               <p v-else-if="booking.status === 'declined'" class="booking-note">This request was declined by the host. You can browse other available spaces.</p>
               <p v-else class="booking-note">This stay has ended.</p>
@@ -94,6 +96,11 @@
               <div v-if="booking.status === 'pending' || booking.status === 'approved'" class="booking-actions">
                 <button type="button" class="end-booking-button" :disabled="updatingBookingId === booking.id" @click="confirmEndBooking(booking)">
                   {{ updatingBookingId === booking.id ? 'Updating…' : booking.status === 'pending' ? 'Cancel request' : 'End stay' }}
+                </button>
+              </div>
+              <div v-else-if="booking.status === 'cancelled' && booking.paymentStatus === 'paid' && booking.amount !== null && booking.amount > 0 && booking.refundStatus === 'none'" class="booking-actions">
+                <button type="button" class="request-refund-button" :disabled="updatingBookingId === booking.id" @click="openRefundDialog(booking)">
+                  <ion-icon :icon="alertCircleOutline" /> Request refund
                 </button>
               </div>
             </article>
@@ -147,6 +154,22 @@
           </div>
         </section>
       </div>
+      <div v-if="bookingToRefund" class="confirmation-backdrop" @click.self="closeRefundDialog">
+        <section class="confirmation-dialog refund-dialog" role="dialog" aria-modal="true" aria-labelledby="refund-title" aria-describedby="refund-description">
+          <span class="confirmation-icon refund-icon" aria-hidden="true"><ion-icon :icon="alertCircleOutline" /></span>
+          <h2 id="refund-title">Request a refund?</h2>
+          <p id="refund-description">Your refund request for <strong>{{ bookingToRefund.listingName }}</strong> will be sent to the host for review. The requested amount is prefilled from your booking.</p>
+          <label class="refund-amount-label" for="refund-amount">Refund amount</label>
+          <div class="refund-amount-field"><span>₱</span><input id="refund-amount" :value="bookingToRefund.amount ?? ''" type="number" readonly aria-readonly="true" /></div>
+          <p v-if="refundError" class="dialog-error" role="alert">{{ refundError }}</p>
+          <div class="confirmation-actions">
+            <button type="button" class="keep-booking-button" :disabled="updatingBookingId !== null" @click="closeRefundDialog">Not now</button>
+            <button type="button" class="confirm-refund-button" :disabled="updatingBookingId === bookingToRefund.id || bookingToRefund.amount === null" @click="requestRefund">
+              {{ updatingBookingId === bookingToRefund.id ? 'Sending…' : 'Send refund request' }}
+            </button>
+          </div>
+        </section>
+      </div>
       <div v-if="confettiBookingId !== null" class="confetti-burst" aria-hidden="true">
         <span v-for="piece in confettiPieces" :key="piece" class="confetti-piece" :style="{ left: `${(piece * 37) % 101}%`, animationDelay: `${(piece % 6) * 0.06}s` }" />
       </div>
@@ -158,19 +181,21 @@
 import { onIonViewWillEnter } from '@ionic/vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { computed, onUnmounted, ref } from 'vue';
-import { searchOutline, star } from 'ionicons/icons';
+import { alertCircleOutline, searchOutline, star } from 'ionicons/icons';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
 import { getSupabaseClient } from '../lib/supabase';
 
 type BookingStatus = 'pending' | 'approved' | 'declined' | 'completed' | 'cancelled';
 type BookingTab = 'all' | 'current' | 'past';
+type RefundStatus = 'none' | 'pending' | 'refunded';
 type BookingRow = {
   id: number;
   listing_id: number;
   room_id: number | null;
   bedspace_id: number | null;
   payment_status: string;
+  refund_status: string;
   request_status: string;
   move_in_date: string | null;
   amount: number | null;
@@ -192,6 +217,7 @@ type ClientBooking = {
   requestedAt: string;
   amount: number | null;
   paymentStatus: string;
+  refundStatus: RefundStatus;
   status: BookingStatus;
   rating: number | null;
   ratingDraft: number | null;
@@ -207,6 +233,8 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const notice = ref('');
 const bookingToEnd = ref<ClientBooking | null>(null);
+const bookingToRefund = ref<ClientBooking | null>(null);
+const refundError = ref('');
 const updatingBookingId = ref<number | null>(null);
 const ratingSavingBookingId = ref<number | null>(null);
 const ratingErrorBookingId = ref<number | null>(null);
@@ -254,6 +282,12 @@ function formatAmount(value: number | null): string {
   return Number.isFinite(amount) ? `₱${amount.toLocaleString('en-PH')} / month` : 'Not available';
 }
 
+function formatRefundAmount(value: number | null): string {
+  if (value === null) return 'the booking amount';
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'the booking amount';
+}
+
 function statusLabel(status: BookingStatus): string {
   return status === 'pending' ? 'Pending review' : status === 'approved' ? 'Approved' : status === 'declined' ? 'Declined' : status === 'cancelled' ? 'Cancelled' : 'Completed';
 }
@@ -279,6 +313,7 @@ function mapBooking(booking: BookingRow, listing: BookingSpaceRow | undefined): 
     requestedAt: formatRequestedAt(booking.created_at),
     amount: booking.amount,
     paymentStatus: booking.payment_status,
+    refundStatus: booking.refund_status === 'pending' || booking.refund_status === 'refunded' ? booking.refund_status : 'none',
     status,
     rating: booking.rating === null ? null : Number(booking.rating),
     ratingDraft: booking.rating === null ? null : Number(booking.rating),
@@ -296,7 +331,7 @@ async function loadBookings() {
     if (!account) throw new Error('Sign in to view your bookings.');
 
     const { data: bookingData, error: bookingError } = await client.from('bookings')
-      .select('id, listing_id, room_id, bedspace_id, payment_status, request_status, move_in_date, amount, rating, created_at')
+      .select('id, listing_id, room_id, bedspace_id, payment_status, refund_status, request_status, move_in_date, amount, rating, created_at')
       .eq('tenant_id', account.id)
       .order('created_at', { ascending: false });
     if (bookingError) throw bookingError;
@@ -321,6 +356,36 @@ async function loadBookings() {
     bookings.value = [];
   } finally {
     isLoading.value = false;
+  }
+}
+
+function openRefundDialog(booking: ClientBooking) {
+  refundError.value = '';
+  bookingToRefund.value = booking;
+}
+
+function closeRefundDialog() {
+  if (updatingBookingId.value !== null) return;
+  bookingToRefund.value = null;
+  refundError.value = '';
+}
+
+async function requestRefund() {
+  const booking = bookingToRefund.value;
+  if (!booking || booking.amount === null || booking.refundStatus !== 'none' || updatingBookingId.value !== null) return;
+  updatingBookingId.value = booking.id;
+  refundError.value = '';
+  try {
+    const { error } = await getSupabaseClient().rpc('request_tenant_booking_refund', { p_booking_id: booking.id });
+    if (error) throw error;
+    booking.refundStatus = 'pending';
+    bookingToRefund.value = null;
+    notice.value = 'Your refund request has been sent to the host.';
+    window.dispatchEvent(new Event('casa:booking-completed'));
+  } catch (error) {
+    refundError.value = `Your refund request couldn’t be sent: ${getErrorMessage(error)}`;
+  } finally {
+    updatingBookingId.value = null;
   }
 }
 
@@ -492,6 +557,8 @@ h1, h2, h3, p { margin-top: 0; }
 .request-status.approved { color: #2f6a4b; background: #e9f4ec; }
 .request-status.declined { color: #a84c43; background: #fbefed; }
 .request-status.cancelled { color: #68766d; background: #eff2ef; }
+.request-status.pending.refunded, .request-status.cancelled.refunded { color: #2f6a4b; background: #e9f4ec; }
+.request-status.cancelled.pending { color: #94672f; background: #fff4e3; }
 .request-status.completed { color: #68766d; background: #eff2ef; }
 .booking-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 21px; padding: 17px 0; border-top: 1px solid #eef0ed; border-bottom: 1px solid #eef0ed; }
 .booking-details div { display: grid; align-content: start; gap: 6px; }
@@ -501,6 +568,7 @@ h1, h2, h3, p { margin-top: 0; }
 .payment-status.paid { color: #2f6a4b; }
 .booking-note { margin: 14px 0 0; color: #818d83; font-size: 11px; line-height: 1.5; }
 .approved-note { color: #3c7252; }
+.refund-note { color: #2f6a4b; font-weight: 600; }
 .rating-panel { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 16px; padding: 14px 16px; border: 1px solid #e8eee8; border-radius: 9px; background: #fbfcfa; }
 .rating-prompt { margin: 0; color: #53675a; font-size: 11px; }
 .rating-stars, .rating-result { display: flex; align-items: center; gap: 3px; }
@@ -526,6 +594,9 @@ h1, h2, h3, p { margin-top: 0; }
 .booking-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 .end-booking-button { padding: 8px 12px; border: 1px solid #e5bcb4; border-radius: 7px; color: #a84c43; background: #fff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .end-booking-button:disabled { opacity: .6; cursor: wait; }
+.request-refund-button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid #e8c99e; border-radius: 7px; color: #95642d; background: #fff8eb; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
+.request-refund-button ion-icon { font-size: 14px; }
+.request-refund-button:disabled { opacity: .6; cursor: wait; }
 .confirmation-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(20 40 28 / 48%); }
 .confirmation-dialog { width: min(100%, 430px); padding: 28px; border-radius: 14px; background: #fff; box-shadow: 0 18px 60px rgb(15 35 23 / 22%); }
 .confirmation-icon { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 15px; border-radius: 50%; color: #a84c43; background: #fbefed; font-weight: 700; }
@@ -539,6 +610,13 @@ h1, h2, h3, p { margin-top: 0; }
 .confirmation-actions button { min-height: 38px; padding: 0 13px; border-radius: 7px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .keep-booking-button { border: 1px solid #e1e7e1; color: #526357; background: #fff; }
 .confirm-end-button { border: 1px solid #a84c43; color: #fff; background: #a84c43; }
+.refund-icon { color: #95642d; background: #fff2df; font-size: 19px; }
+.refund-icon ion-icon { font-size: 20px; }
+.refund-amount-label { display: block; margin: -5px 0 7px; color: #53675a; font-size: 11px; font-weight: 700; }
+.refund-amount-field { display: flex; align-items: center; gap: 9px; margin-bottom: 20px; padding: 10px 12px; border: 1px solid #e1e7e1; border-radius: 7px; color: #758178; background: #f8faf7; }
+.refund-amount-field input { width: 100%; padding: 0; border: 0; outline: 0; color: #204a34; background: transparent; font: inherit; font-size: 14px; font-weight: 700; }
+.confirm-refund-button { border: 1px solid #95642d; color: #fff; background: #95642d; }
+.confirm-refund-button:disabled { opacity: .6; cursor: wait; }
 .confirmation-actions button:disabled { opacity: .6; cursor: wait; }
 .empty-state { padding: 58px 20px; border: 1px dashed #dce5dc; border-radius: 12px; text-align: center; background: #fff; }
 .empty-icon { margin: 0 auto 15px; }
