@@ -1,27 +1,30 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="host-content">
-      <header class="host-header">
+      <div ref="hostShell" class="host-page">
+      <header class="host-header" data-reveal>
         <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
         <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a href="/host/spaces">My spaces</a><a class="active" href="/host/requests">Requests <span v-if="pendingCount" class="nav-count">{{ pendingCount }}</span></a></nav>
         <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
       <main class="host-shell">
-        <div class="page-heading"><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">BOOKING INBOX</span><h1>Requests.</h1><p>Review potential residents and find the right fit for your spaces.</p></div><span class="pending-summary"><strong>{{ pendingCount }}</strong> pending review</span></div>
-        <div class="request-toolbar"><div class="tabs" role="tablist"><button v-for="tab in tabs" :key="tab.value" :class="{ active: selectedTab === tab.value }" type="button" role="tab" :aria-selected="selectedTab === tab.value" @click="selectedTab = tab.value">{{ tab.label }} <span v-if="tab.count">{{ tab.count }}</span></button></div><select v-model="spaceFilter" aria-label="Filter requests by space"><option value="all">All spaces</option><option v-for="space in requestSpaces" :key="space" :value="space">{{ space }}</option></select></div>
-        <p v-if="notice" class="notice" role="status">{{ notice }}</p>
-        <p v-if="errorMessage" class="request-error" role="alert">{{ errorMessage }}</p>
-        <p v-if="isLoading" class="request-loading" role="status">Loading booking requests…</p>
+        <div class="page-heading" data-reveal><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">BOOKING INBOX</span><h1>Requests.</h1><p>Review potential residents and find the right fit for your spaces.</p></div><span class="pending-summary"><strong>{{ pendingCount }}</strong> pending review</span></div>
+        <div class="request-toolbar" data-reveal><div class="tabs" role="tablist"><button v-for="tab in tabs" :key="tab.value" :class="{ active: selectedTab === tab.value }" type="button" role="tab" :aria-selected="selectedTab === tab.value" @click="selectedTab = tab.value">{{ tab.label }} <span v-if="tab.count">{{ tab.count }}</span></button></div><select v-model="spaceFilter" aria-label="Filter requests by space"><option value="all">All spaces</option><option v-for="space in requestSpaces" :key="space" :value="space">{{ space }}</option></select></div>
+        <p v-if="notice" class="notice" data-reveal role="status">{{ notice }}</p>
+        <p v-if="errorMessage" class="request-error" data-reveal role="alert">{{ errorMessage }}</p>
+        <p v-if="isLoading" class="request-loading" data-reveal role="status">Loading booking requests…</p>
         <section class="request-list" aria-label="Booking requests">
-          <article v-for="request in filteredRequests" :key="request.id" class="request-card">
+          <article v-for="(request, index) in filteredRequests" :key="request.id" class="request-card" data-reveal
+            :class="`reveal-delay-${index % 3}`">
             <div class="request-top"><span class="request-avatar">{{ request.initials }}</span><div class="request-person"><h2>{{ request.name }}</h2><span>Requested {{ request.requested }}</span></div><span :class="['request-status', request.status]">{{ request.status === 'pending' ? 'Pending review' : request.status === 'approved' ? 'Approved' : request.status === 'completed' ? 'Completed' : request.status === 'cancelled' ? 'Cancelled by client' : 'Declined' }}</span></div>
             <div class="request-info"><div><small>Interested in</small><strong>{{ request.space }} · {{ request.listing }}</strong></div><div><small>Move-in date</small><strong>{{ request.moveIn }}</strong></div><div><small>Monthly rent</small><strong>₱{{ request.price.toLocaleString() }}</strong></div><div><small>Contact</small><a :href="`mailto:${request.email}`">{{ request.email }}</a></div></div>
             <p v-if="request.message" class="message">“{{ request.message }}”</p>
             <div v-if="request.status === 'pending'" class="request-actions"><button class="approve" type="button" :disabled="updatingRequestId === request.id" @click="updateRequest(request, 'approved')"><ion-icon :icon="checkmarkOutline" /> {{ updatingRequestId === request.id ? 'Saving…' : 'Approve request' }}</button><button class="decline" type="button" :disabled="updatingRequestId === request.id" @click="updateRequest(request, 'declined')">{{ updatingRequestId === request.id ? 'Saving…' : 'Decline' }}</button></div><div v-else-if="request.status === 'approved'" class="request-actions"><button class="decline" type="button" :disabled="updatingRequestId === request.id" @click="endTenancy(request)">{{ updatingRequestId === request.id ? 'Saving…' : 'End tenancy' }}</button></div><div v-else class="resolved-note"><ion-icon :icon="checkmarkOutline" /> {{ request.status === 'completed' ? 'This tenancy has ended.' : request.status === 'cancelled' ? 'The client cancelled this request.' : 'This request was declined.' }}</div>
           </article>
         </section>
-        <div v-if="!isLoading && !errorMessage && filteredRequests.length === 0" class="empty-state"><ion-icon :icon="checkmarkOutline" /><h2>No requests here</h2><p>Try another filter to see more booking activity.</p></div>
+        <div v-if="!isLoading && !errorMessage && filteredRequests.length === 0" class="empty-state" data-reveal><ion-icon :icon="checkmarkOutline" /><h2>No requests here</h2><p>Try another filter to see more booking activity.</p></div>
       </main>
+      </div>
       <div v-if="pendingEndTenancy" class="end-tenancy-backdrop" @click.self="cancelEndTenancy">
         <section class="end-tenancy-dialog" role="alertdialog" aria-modal="true" aria-labelledby="end-tenancy-title" aria-describedby="end-tenancy-description">
           <span class="end-tenancy-icon" aria-hidden="true">!</span>
@@ -45,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { checkmarkOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
@@ -92,6 +95,7 @@ type RequestListingRow = {
 const selectedTab = ref<RequestTab>('all');
 const { logout } = useLogout();
 const { user } = useAuthUser();
+const hostShell = ref<HTMLElement | null>(null);
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
 const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
 const spaceFilter = ref('all');
@@ -107,6 +111,59 @@ const requestSpaces = computed(() => [...new Set(requests.value.map((request) =>
 const filteredRequests = computed(() => requests.value.filter((request) =>
   (selectedTab.value === 'all' || (selectedTab.value === 'resolved' ? request.status !== 'pending' : request.status === selectedTab.value))
   && (spaceFilter.value === 'all' || request.listing === spaceFilter.value)));
+let revealObserver: IntersectionObserver | undefined;
+let contentScrollRoot: HTMLElement | null = null;
+let revealInitialized = false;
+
+function observeRevealElements() {
+  if (!revealInitialized) initializeReveal();
+  if (!revealInitialized) return;
+
+  const revealElements = hostShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => revealObserver?.observe(element));
+  revealVisibleElements();
+}
+function revealVisibleElements() {
+  if (!revealInitialized) return;
+
+  const rootBounds = contentScrollRoot?.getBoundingClientRect();
+  const rootTop = Math.max(rootBounds?.top ?? 0, 0);
+  const rootBottom = Math.min(rootBounds?.bottom ?? window.innerHeight, window.innerHeight);
+  const revealElements = hostShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => {
+    const bounds = element.getBoundingClientRect();
+    if (bounds.bottom > rootTop && bounds.top < rootBottom) {
+      element.classList.add('is-revealed');
+      revealObserver?.unobserve(element);
+    }
+  });
+}
+function initializeReveal() {
+  if (revealInitialized || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  contentScrollRoot = hostShell.value?.closest('ion-content')
+    ?.shadowRoot?.querySelector<HTMLElement>('.inner-scroll') ?? null;
+  if (!contentScrollRoot || !hostShell.value) return;
+
+  revealInitialized = true;
+  hostShell.value.classList.add('host-page--revealing');
+  if ('IntersectionObserver' in window) {
+    revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-revealed');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  }
+
+  contentScrollRoot.addEventListener('scroll', revealVisibleElements, { passive: true });
+  window.addEventListener('scroll', revealVisibleElements, { passive: true });
+  observeRevealElements();
+}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -247,7 +304,16 @@ async function confirmEndTenancy() {
     updatingRequestId.value = null;
   }
 }
-onMounted(() => { void loadRequests(); });
+onMounted(() => {
+  window.requestAnimationFrame(initializeReveal);
+  void loadRequests();
+});
+onBeforeUnmount(() => {
+  revealObserver?.disconnect();
+  contentScrollRoot?.removeEventListener('scroll', revealVisibleElements);
+  window.removeEventListener('scroll', revealVisibleElements);
+});
+watch([filteredRequests, isLoading, errorMessage, notice], observeRevealElements, { flush: 'post' });
 </script>
 
 <style scoped>
@@ -265,4 +331,10 @@ onMounted(() => { void loadRequests(); });
 .confirm-end-tenancy { background: #a4472a; border: 1px solid #a4472a; color: #fff; }
 .end-tenancy-actions button:disabled { cursor: wait; opacity: .6; }
 @media (max-width: 700px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account a { display: none; }.host-shell { padding: 38px 18px 55px; }.page-heading { align-items: start; flex-direction: column; gap: 22px; }.request-toolbar { align-items: stretch; flex-direction: column; gap: 12px; }.tabs { gap: 14px; overflow-x: auto; }.request-toolbar select { margin: 0; }.request-card { padding: 17px 15px; }.request-status { margin-left: auto; }.request-info { gap: 10px; }.request-info strong { font-size: 10px; }.request-actions { align-items: stretch; flex-wrap: wrap; }.request-actions button { flex: 1; }.view-profile { flex: 0 0 100% !important; margin-left: 0; } }
+.host-page [data-reveal] { transition: opacity .65s ease, transform .65s cubic-bezier(.2, .7, .2, 1); }
+.host-page--revealing [data-reveal]:not(.is-revealed) { opacity: 0; transform: translateY(18px); }
+.host-page--revealing [data-reveal].is-revealed { opacity: 1; }
+.request-list .reveal-delay-1 { transition-delay: 100ms; }
+.request-list .reveal-delay-2 { transition-delay: 200ms; }
+@media (prefers-reduced-motion: reduce) { .host-page [data-reveal] { transition: none; } }
 </style>

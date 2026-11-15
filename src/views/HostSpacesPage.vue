@@ -1,20 +1,22 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="host-content">
-      <header class="host-header">
+      <div ref="hostShell" class="host-page">
+      <header class="host-header" data-reveal>
         <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
         <nav class="host-nav" aria-label="Host navigation"><a href="/host">Dashboard</a><a class="active" href="/host/spaces">My spaces</a><a href="/host/requests">Requests</a></nav>
         <div class="host-account"><span class="avatar">{{ initials }}</span><span class="host-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
       </header>
       <main class="host-shell">
-        <div class="page-heading"><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">YOUR CASA SPACES</span><h1>My spaces.</h1><p>Keep your listings fresh, accurate, and ready for their next resident.</p></div><a class="primary-button" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Add a space</a></div>
-        <div class="toolbar"><div class="search-box"><ion-icon :icon="searchOutline" /><input v-model="search" type="search" placeholder="Search your spaces" aria-label="Search spaces" /></div><select v-model="filter" aria-label="Filter spaces"><option value="all">All spaces</option><option value="published">Published</option><option value="draft">Drafts</option></select></div>
-        <p v-if="errorMessage" class="notice error-notice" role="alert">{{ errorMessage }}</p>
-        <p v-else-if="notice" class="notice" role="status">{{ notice }}</p>
-        <p v-if="availabilityError" class="notice error-notice" role="alert">Availability couldn’t be loaded: {{ availabilityError }}</p>
-        <p v-if="isLoading" class="data-message" role="status">Loading your listings…</p>
+        <div class="page-heading" data-reveal><div><a class="back-link" href="/host">← Dashboard</a><span class="eyebrow">YOUR CASA SPACES</span><h1>My spaces.</h1><p>Keep your listings fresh, accurate, and ready for their next resident.</p></div><a class="primary-button" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Add a space</a></div>
+        <div class="toolbar" data-reveal><div class="search-box"><ion-icon :icon="searchOutline" /><input v-model="search" type="search" placeholder="Search your spaces" aria-label="Search spaces" /></div><select v-model="filter" aria-label="Filter spaces"><option value="all">All spaces</option><option value="published">Published</option><option value="draft">Drafts</option></select></div>
+        <p v-if="errorMessage" class="notice error-notice" data-reveal role="alert">{{ errorMessage }}</p>
+        <p v-else-if="notice" class="notice" data-reveal role="status">{{ notice }}</p>
+        <p v-if="availabilityError" class="notice error-notice" data-reveal role="alert">Availability couldn’t be loaded: {{ availabilityError }}</p>
+        <p v-if="isLoading" class="data-message" data-reveal role="status">Loading your listings…</p>
         <section v-else-if="!errorMessage && filteredSpaces.length" class="space-grid" aria-label="Host spaces">
-          <article v-for="space in filteredSpaces" :key="space.id" :id="`space-${space.id}`" class="space-card" :class="{ 'focused-space': focusedSpaceId === space.id }" role="link" tabindex="0" @click="previewSpace(space.id)" @keydown.enter.self="previewSpace(space.id)">
+          <article v-for="(space, index) in filteredSpaces" :key="space.id" :id="`space-${space.id}`" class="space-card" data-reveal
+            :class="[{ 'focused-space': focusedSpaceId === space.id }, `reveal-delay-${index % 4}`]" role="link" tabindex="0" @click="previewSpace(space.id)" @keydown.enter.self="previewSpace(space.id)">
             <div class="space-photo" :style="{ backgroundImage: `url(${space.cover_photo_url || defaultListingImage})` }">
               <span :class="['status-badge', space.status]"><i /> {{ space.status === 'published' ? 'Published' : 'Draft' }}</span>
             </div>
@@ -28,8 +30,9 @@
             </div>
           </article>
         </section>
-        <div v-else-if="!errorMessage" class="empty-state"><ion-icon :icon="searchOutline" /><h2>{{ spaces.length ? 'No spaces found' : 'No listings yet' }}</h2><p>{{ spaces.length ? 'Try a different search or filter.' : 'Add your first space to get started.' }}</p><a v-if="!spaces.length" class="primary-button" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Add a space</a></div>
+        <div v-else-if="!errorMessage" class="empty-state" data-reveal><ion-icon :icon="searchOutline" /><h2>{{ spaces.length ? 'No spaces found' : 'No listings yet' }}</h2><p>{{ spaces.length ? 'Try a different search or filter.' : 'Add your first space to get started.' }}</p><a v-if="!spaces.length" class="primary-button" href="/host/spaces/new"><ion-icon :icon="addOutline" /> Add a space</a></div>
       </main>
+      </div>
       <Transition name="preview">
       <div v-if="previewLoading || previewError || selectedPreview" class="preview-backdrop" @click.self="closePreview">
         <section v-if="previewLoading" class="preview-dialog preview-message" role="status">Loading listing preview…</section>
@@ -72,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import { useRoute, useRouter } from 'vue-router';
 import { addOutline, locationOutline, searchOutline, trashOutline } from 'ionicons/icons';
@@ -101,6 +104,7 @@ type HostSpace = {
 const search = ref('');
 const { logout } = useLogout();
 const { user } = useAuthUser();
+const hostShell = ref<HTMLElement | null>(null);
 const route = useRoute();
 const router = useRouter();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Host');
@@ -118,6 +122,9 @@ const pendingDeleteSpace = ref<HostSpace | null>(null);
 const deleteError = ref('');
 const focusedSpaceId = ref<number | null>(null);
 const selectedPreview = ref<Listing | null>(null);
+let revealObserver: IntersectionObserver | undefined;
+let contentScrollRoot: HTMLElement | null = null;
+let revealInitialized = false;
 const previewFloors = computed(() => selectedPreview.value ? getBookingFloors(selectedPreview.value) : []);
 const previewStatus = ref<'published' | 'draft'>('published');
 const previewLoading = ref(false);
@@ -128,6 +135,56 @@ const filteredSpaces = computed(() => {
     && (!term || `${space.name} ${space.location} ${space.type}`.toLowerCase().includes(term)));
 });
 let focusTimer: number | undefined;
+
+function observeRevealElements() {
+  if (!revealInitialized) initializeReveal();
+  if (!revealInitialized) return;
+
+  const revealElements = hostShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => revealObserver?.observe(element));
+  revealVisibleElements();
+}
+function revealVisibleElements() {
+  if (!revealInitialized) return;
+
+  const rootBounds = contentScrollRoot?.getBoundingClientRect();
+  const rootTop = Math.max(rootBounds?.top ?? 0, 0);
+  const rootBottom = Math.min(rootBounds?.bottom ?? window.innerHeight, window.innerHeight);
+  const revealElements = hostShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => {
+    const bounds = element.getBoundingClientRect();
+    if (bounds.bottom > rootTop && bounds.top < rootBottom) {
+      element.classList.add('is-revealed');
+      revealObserver?.unobserve(element);
+    }
+  });
+}
+function initializeReveal() {
+  if (revealInitialized || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  contentScrollRoot = hostShell.value?.closest('ion-content')
+    ?.shadowRoot?.querySelector<HTMLElement>('.inner-scroll') ?? null;
+  if (!contentScrollRoot || !hostShell.value) return;
+
+  revealInitialized = true;
+  hostShell.value.classList.add('host-page--revealing');
+  if ('IntersectionObserver' in window) {
+    revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-revealed');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  }
+
+  contentScrollRoot.addEventListener('scroll', revealVisibleElements, { passive: true });
+  window.addEventListener('scroll', revealVisibleElements, { passive: true });
+  observeRevealElements();
+}
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
@@ -262,8 +319,17 @@ async function confirmDelete() {
   }
 }
 
-onIonViewWillEnter(() => { void loadSpaces(); });
-onUnmounted(() => window.clearTimeout(focusTimer));
+onIonViewWillEnter(() => {
+  window.requestAnimationFrame(initializeReveal);
+  void loadSpaces();
+});
+onUnmounted(() => {
+  window.clearTimeout(focusTimer);
+  revealObserver?.disconnect();
+  contentScrollRoot?.removeEventListener('scroll', revealVisibleElements);
+  window.removeEventListener('scroll', revealVisibleElements);
+});
+watch([filteredSpaces, isLoading, errorMessage, notice, availabilityError], observeRevealElements, { flush: 'post' });
 </script>
 
 <style scoped>
@@ -315,4 +381,11 @@ onUnmounted(() => window.clearTimeout(focusTimer));
 @media (max-width: 620px) { .host-header { height: 70px; padding: 0 18px; }.host-nav { display: none; }.host-name, .host-account a { display: none; }.host-shell { padding: 38px 18px 55px; }.page-heading { align-items: start; flex-direction: column; gap: 22px; }.page-heading .primary-button { align-self: stretch; justify-content: center; }.toolbar { align-items: stretch; flex-direction: column; }.toolbar select { width: 100%; }.space-actions { flex-wrap: wrap; }.space-actions button { min-width: calc(50% - 4px); }.preview-backdrop { align-items: end; padding: 0; }.preview-dialog { border-radius: 14px 14px 0 0; max-height: 94vh; }.preview-cover { height: 150px; }.preview-content { padding: 15px 14px 22px; }.preview-heading { gap: 10px; }.delete-dialog { padding: 23px 18px; }.delete-dialog-actions { flex-direction: column-reverse; } }
 @media (prefers-reduced-motion: reduce) { .preview-enter-active, .preview-leave-active, .preview-enter-active .preview-dialog, .preview-leave-active .preview-dialog, .delete-confirm-enter-active, .delete-confirm-leave-active, .delete-confirm-enter-active .delete-dialog, .delete-confirm-leave-active .delete-dialog { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .space-card.focused-space { animation: none; box-shadow: 0 0 0 4px #e2743e80, 0 12px 24px #174b3530; } }
+.host-page [data-reveal] { transition: opacity .65s ease, transform .65s cubic-bezier(.2, .7, .2, 1); }
+.host-page--revealing [data-reveal]:not(.is-revealed) { opacity: 0; transform: translateY(18px); }
+.host-page--revealing [data-reveal].is-revealed { opacity: 1; }
+.space-grid .reveal-delay-1 { transition-delay: 100ms; }
+.space-grid .reveal-delay-2 { transition-delay: 200ms; }
+.space-grid .reveal-delay-3 { transition-delay: 300ms; }
+@media (prefers-reduced-motion: reduce) { .host-page [data-reveal] { transition: none; } }
 </style>

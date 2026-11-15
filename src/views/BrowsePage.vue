@@ -1,17 +1,18 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="browse-content">
-      <header class="browse-header">
+      <div ref="browseShell" class="browse-shell">
+      <header class="browse-header" data-reveal>
         <a class="brand" href="/home" aria-label="Casa home">
           <img :src="'/casa-logo.png'" alt="" class="brand-mark" />
           <span>casa<span class="brand-dot">.</span></span>
         </a>
-        <div class="search-bar">
+        <form class="search-bar" @submit.prevent="applySearch">
           <ion-icon :icon="searchOutline" />
           <input v-model="searchTerm" type="search" placeholder="Search city, school, or area"
             aria-label="Search listings" />
-          <button type="button" aria-label="Search"><ion-icon :icon="arrowForwardOutline" /></button>
-        </div>
+          <button type="submit" aria-label="Search"><ion-icon :icon="arrowForwardOutline" /></button>
+        </form>
         <nav class="header-actions" aria-label="Account navigation">
           <a href="/listings">Browse all listings</a>
           <a href="/signup?role=landlord">List your space</a>
@@ -26,8 +27,9 @@
       </header>
 
       <main class="browse-layout">
-        <section class="listings-panel" :class="{ 'filters-open': showFilters }">
-          <div class="results-top">
+        <section ref="listingsPanel" class="listings-panel" :class="{ 'filters-open': showFilters }"
+          @scroll.passive="revealVisibleElements">
+          <div class="results-top" data-reveal>
             <div>
               <span class="eyebrow">EXPLORE THE MAP</span>
               <h1>Spaces near <em>you.</em></h1>
@@ -42,7 +44,7 @@
             </label>
           </div>
 
-          <div class="filter-strip">
+          <div class="filter-strip" data-reveal>
             <button class="filter-arrow" type="button" aria-label="Scroll filters left" @click="scrollFilters(-1)">
               <ion-icon :icon="chevronBackOutline" />
             </button>
@@ -57,13 +59,17 @@
             </button>
           </div>
 
-          <p v-if="listingsError" class="data-message error-message" role="alert">
+          <p v-if="listingsError" class="data-message error-message" data-reveal role="alert">
             Listings couldn’t be loaded: {{ listingsError }}
             <button type="button" @click="loadListings">Try again</button>
           </p>
           <div class="listing-list">
-            <article v-for="listing in filteredListings" :key="listing.id" class="listing-card"
-              :class="{ active: selectedListing?.id === listing.id }" @click="selectedListing = listing">
+            <article v-for="(listing, index) in filteredListings" :key="listing.id" class="listing-card"
+              data-reveal :class="[
+                { active: selectedListing?.id === listing.id },
+                `reveal-delay-${index % 3}`,
+              ]"
+              @click="selectedListing = listing">
               <div class="listing-image" :style="{ backgroundImage: `url(${listing.image})` }">
                 <span class="listing-badge" :class="getListingTag(listing).variant">{{ getListingTag(listing).label }}</span>
                 <button class="favorite-button" :class="{ liked: favorites.has(listing.id) }" type="button"
@@ -81,7 +87,7 @@
                     amenities</span><strong>₱{{ listing.price.toLocaleString() }}<small> / month</small></strong></div>
               </div>
             </article>
-            <div v-if="!isLoading && !listingsError && filteredListings.length === 0" class="empty-state">
+            <div v-if="!isLoading && !listingsError && filteredListings.length === 0" class="empty-state" data-reveal>
               <ion-icon :icon="searchOutline" />
               <h2>No spaces found yet.</h2>
               <p>Try searching a different area or clearing your filters.</p><button type="button"
@@ -90,7 +96,7 @@
           </div>
         </section>
 
-        <aside class="map-panel" aria-label="Map of Casa listings">
+        <aside class="map-panel" aria-label="Map of Casa listings" data-reveal>
           <div class="map-container">
             <div ref="mapElement" class="leaflet-map" role="application"
               aria-label="Map of listings. Click or drag a pin to filter listings within five kilometers." />
@@ -132,13 +138,14 @@
           </div>
         </section>
       </div>
+      </div>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import L, { type Circle, type Map as LeafletMap, type Marker } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -172,16 +179,18 @@ const filters = [
   { label: 'All spaces', value: 'all', icon: sparklesOutline },
   { label: 'Private room', value: 'Private room', icon: homeOutline },
   { label: 'Bedspaces', value: 'Bedspace', icon: personOutline },
-  { label: 'Highly rated', value: 'highly-rated', icon: star },
   { label: 'Budget friendly', value: 'budget-friendly', icon: walletOutline },
   { label: 'Newly added', value: 'newly-added', icon: sparklesOutline },
 ];
 const NEARBY_RADIUS_METERS = 5000;
 const searchTerm = ref('');
+const route = useRoute();
 const activeFilter = ref('all');
 const sortBy = ref('recommended');
 const { listings, isLoading, error: listingsError, loadListings } = usePublishedListings();
 const unlocatedListingsCount = computed(() => listings.value.filter((listing) => !listing.coordinates).length);
+const browseShell = ref<HTMLElement | null>(null);
+const listingsPanel = ref<HTMLElement | null>(null);
 const mapElement = ref<HTMLDivElement | null>(null);
 const nearbyPin = ref<L.LatLng | null>(null);
 const filterScroller = ref<HTMLElement | null>(null);
@@ -198,6 +207,9 @@ let listingMarkerLayer: L.MarkerClusterGroup | null = null;
 let nearbyPinMarker: Marker | null = null;
 let nearbyRadiusCircle: Circle | null = null;
 let mapResizeObserver: ResizeObserver | null = null;
+let revealObserver: IntersectionObserver | undefined;
+let contentScrollRoot: HTMLElement | null = null;
+let revealInitialized = false;
 let hasFitListingBounds = false;
 const router = useRouter();
 const { user } = useAuthUser();
@@ -205,6 +217,68 @@ const { logout } = useLogout();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/client');
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
+watch(() => route.query.search, (search) => {
+  searchTerm.value = typeof search === 'string' ? search : '';
+}, { immediate: true });
+
+function applySearch() {
+  void router.replace({
+    name: 'Browse',
+    query: { ...route.query, search: searchTerm.value.trim() || undefined },
+  });
+}
+
+function observeRevealElements() {
+  if (!revealInitialized) initializeReveal();
+  if (!revealInitialized) return;
+
+  const revealElements = browseShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => revealObserver?.observe(element));
+  revealVisibleElements();
+}
+function revealVisibleElements() {
+  if (!revealInitialized) return;
+
+  const revealElements = browseShell.value?.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-revealed)');
+  revealElements?.forEach((element) => {
+    const scrollContainer = listingsPanel.value?.contains(element) ? listingsPanel.value : contentScrollRoot;
+    const rootBounds = scrollContainer?.getBoundingClientRect();
+    const rootTop = Math.max(rootBounds?.top ?? 0, 0);
+    const rootBottom = Math.min(rootBounds?.bottom ?? window.innerHeight, window.innerHeight);
+    const bounds = element.getBoundingClientRect();
+    if (bounds.bottom > rootTop && bounds.top < rootBottom) {
+      element.classList.add('is-revealed');
+      revealObserver?.unobserve(element);
+    }
+  });
+}
+function initializeReveal() {
+  if (revealInitialized || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  contentScrollRoot = document.querySelector('ion-content.browse-content')
+    ?.shadowRoot?.querySelector<HTMLElement>('.inner-scroll') ?? null;
+  if (!contentScrollRoot || !browseShell.value) return;
+
+  revealInitialized = true;
+  browseShell.value.classList.add('browse-shell--revealing');
+  if ('IntersectionObserver' in window) {
+    revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-revealed');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  }
+
+  contentScrollRoot.addEventListener('scroll', revealVisibleElements, { passive: true });
+  window.addEventListener('scroll', revealVisibleElements, { passive: true });
+  observeRevealElements();
+}
+
 function getListingTag(listing: Listing) {
   if (isListingFullyBooked(listing)) return { label: 'Fully booked', variant: 'fully-booked-tag' };
   if (isNewlyAdded(listing)) return { label: 'New', variant: 'new-tag' };
@@ -337,8 +411,14 @@ function distanceInMeters(first: L.LatLng, second: L.LatLng) {
     + Math.cos(latitudeOne) * Math.cos(latitudeTwo) * Math.sin(longitudeDelta / 2) ** 2;
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
-onIonViewWillEnter(() => { void loadListings(); });
-onMounted(() => { void nextTick(initializeMap); });
+onIonViewWillEnter(() => {
+  window.requestAnimationFrame(initializeReveal);
+  void loadListings();
+});
+onMounted(() => {
+  window.requestAnimationFrame(initializeReveal);
+  void nextTick(initializeMap);
+});
 function updateScrollIndicator() {
   const element = selectedListingElement.value;
   hasScrollableContent.value = Boolean(element && element.scrollHeight > element.clientHeight + 1);
@@ -365,6 +445,9 @@ watch(selectedListing, (listing) => {
 onBeforeUnmount(() => {
   selectedListingResizeObserver?.disconnect();
   mapResizeObserver?.disconnect();
+  revealObserver?.disconnect();
+  contentScrollRoot?.removeEventListener('scroll', revealVisibleElements);
+  window.removeEventListener('scroll', revealVisibleElements);
   leafletMap?.remove();
   leafletMap = null;
 });
@@ -401,7 +484,6 @@ const filteredListings = computed(() => {
         L.latLng(listing.coordinates.latitude, listing.coordinates.longitude),
       ) <= NEARBY_RADIUS_METERS);
     const matchesFilter = activeFilter.value === 'all'
-      || (activeFilter.value === 'highly-rated' && Number(listing.rating) >= 4.8)
       || (activeFilter.value === 'budget-friendly' && listing.price <= 8000)
       || (activeFilter.value === 'newly-added' && isNewlyAdded(listing))
       || listing.type === activeFilter.value;
@@ -414,6 +496,7 @@ const filteredListings = computed(() => {
   });
 });
 watch(filteredListings, refreshListingMarkers);
+watch([filteredListings, isLoading, listingsError], observeRevealElements, { flush: 'post' });
 
 function toggleFavorite(id: number) {
   const next = new Set(favorites.value);
@@ -425,6 +508,7 @@ function clearFilters() {
   searchTerm.value = '';
   activeFilter.value = 'all';
   sortBy.value = 'recommended';
+  void router.replace({ name: 'Browse', query: { ...route.query, search: undefined } });
 }
 </script>
 
@@ -443,6 +527,36 @@ function clearFilters() {
 
 .browse-content {
   --background: #fbfaf7;
+}
+
+.browse-shell [data-reveal] {
+  transition: opacity .65s ease, transform .65s cubic-bezier(.2, .7, .2, 1);
+}
+
+.browse-shell--revealing [data-reveal]:not(.is-revealed) {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+.browse-shell--revealing [data-reveal].is-revealed {
+  opacity: 1;
+}
+
+.browse-shell--revealing .listing-card {
+  transition: opacity .65s ease, border .2s, box-shadow .2s, transform .65s cubic-bezier(.2, .7, .2, 1);
+}
+
+.browse-shell--revealing .listing-card:hover,
+.browse-shell--revealing .listing-card.active {
+  transition: opacity .65s ease, border .2s, box-shadow .2s, transform .2s;
+}
+
+.listing-list > .reveal-delay-1 {
+  transition-delay: 100ms;
+}
+
+.listing-list > .reveal-delay-2 {
+  transition-delay: 200ms;
 }
 
 .data-message {
@@ -1446,6 +1560,10 @@ function clearFilters() {
 @media (prefers-reduced-motion: reduce) {
   .scroll-indicator {
     animation: none;
+  }
+
+  .browse-shell [data-reveal] {
+    transition: none;
   }
 }
 </style>
