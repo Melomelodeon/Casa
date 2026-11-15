@@ -144,8 +144,16 @@
                     <div v-if="form.message"><span>Note to host</span><strong>{{ form.message }}</strong></div>
                     <div class="review-space"><span>Space</span><strong>{{ booking.space }} · {{ booking.listing }}</strong></div>
                   </div>
-                  <label class="terms"><input v-model="form.agreed" data-wizard-field required type="checkbox" />
-                    <span>I agree to Casa's booking guidelines and understand this is a request, not a confirmed reservation.</span></label>
+                  <div class="terms">
+                    <input id="booking-guidelines-agreement" v-model="form.agreed" data-wizard-field
+                      aria-label="Agree to Casa's booking guidelines" aria-describedby="booking-guidelines-consent"
+                      required type="checkbox" />
+                    <span id="booking-guidelines-consent">
+                      I agree to Casa's
+                      <button class="guidelines-link" type="button" @click="openBookingGuidelines($event)">booking guidelines</button>
+                      and understand this is a request, not a confirmed reservation.
+                    </span>
+                  </div>
                 </template>
               </section>
             </Transition>
@@ -168,12 +176,47 @@
           </form>
         </div>
       </main>
+      <dialog v-if="showBookingGuidelines" ref="bookingGuidelinesDialog" class="guidelines-dialog"
+        aria-labelledby="booking-guidelines-title" @click="closeBookingGuidelinesOnBackdrop"
+        @close="handleBookingGuidelinesClose">
+        <header class="guidelines-dialog-header">
+          <div>
+            <span class="eyebrow">BEFORE YOU CONTINUE</span>
+            <h2 id="booking-guidelines-title">Booking guidelines</h2>
+          </div>
+          <button class="guidelines-close" type="button" aria-label="Close booking guidelines"
+            @click="closeBookingGuidelines">×</button>
+        </header>
+        <div class="guidelines-content">
+          <p>Review these points before sending a request for {{ booking.space }} at {{ booking.listing }}.</p>
+          <section>
+            <h3>A request is not a reservation</h3>
+            <p>Your request is sent to the host for review. The space is not reserved unless the host approves it and you complete any separate rental agreement required by the host.</p>
+          </section>
+          <section>
+            <h3>Check the details</h3>
+            <p>Confirm the selected room or bedspace, monthly rent, move-in date, and your contact information. Availability and arrangements should be confirmed directly with the host.</p>
+          </section>
+          <section>
+            <h3>Checkout and payment status</h3>
+            <p>Continuing opens the checkout step for the amount shown. Review the amount and instructions before proceeding. Casa records the booking and payment status shown in the service; do not treat a submitted request as host approval.</p>
+          </section>
+          <section>
+            <h3>Your information</h3>
+            <p>Your name, email, move-in date, and optional message are shared with the host so they can respond to your request. Keep messages relevant and do not include passwords or sensitive payment credentials.</p>
+          </section>
+          <section>
+            <h3>Changes, cancellations, and safety</h3>
+            <p>Contact the host promptly if your plans change, and confirm any cancellation or refund arrangements before relying on them. Independently verify the space, its rules, and the rental terms before moving in.</p>
+          </section>
+        </div>
+      </dialog>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { IonContent, IonIcon, IonPage, onIonViewWillEnter } from '@ionic/vue';
 import { arrowBackOutline, arrowForwardOutline, checkmarkOutline, locationOutline, shieldCheckmarkOutline } from 'ionicons/icons';
@@ -210,6 +253,9 @@ const minimumMoveInDate = (() => {
 const submitted = computed(() => route.query.bookingSuccess === 'true');
 const isSubmitting = ref(false);
 const errorMessage = ref('');
+const showBookingGuidelines = ref(false);
+const bookingGuidelinesDialog = ref<HTMLDialogElement | null>(null);
+const bookingGuidelinesDialogOpener = ref<HTMLElement | null>(null);
 onIonViewWillEnter(() => {
   windAnimationKey.value += 1;
 });
@@ -230,6 +276,25 @@ const confirmationMoveInDate = computed(() => {
     day: 'numeric',
   });
 });
+
+function openBookingGuidelines(event: MouseEvent) {
+  bookingGuidelinesDialogOpener.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  showBookingGuidelines.value = true;
+  void nextTick(() => bookingGuidelinesDialog.value?.showModal());
+}
+
+function closeBookingGuidelines() {
+  bookingGuidelinesDialog.value?.close();
+}
+
+function closeBookingGuidelinesOnBackdrop(event: MouseEvent) {
+  if (event.target === bookingGuidelinesDialog.value) closeBookingGuidelines();
+}
+
+function handleBookingGuidelinesClose() {
+  showBookingGuidelines.value = false;
+  bookingGuidelinesDialogOpener.value?.focus();
+}
 
 onMounted(async () => {
   const { data: { user } } = await getSupabaseClient().auth.getUser();
@@ -557,6 +622,111 @@ async function submitBooking() {
   padding: 2px 0;
 }
 
+.guidelines-link {
+  background: transparent;
+  border: 0;
+  color: #e2743e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.guidelines-link:focus-visible {
+  outline: 2px solid #e2743e;
+  outline-offset: 2px;
+}
+
+.guidelines-dialog {
+  background: #fbfaf7;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(23, 75, 53, .28);
+  color: #174b35;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  max-height: min(86vh, 760px);
+  max-width: 620px;
+  overflow: hidden;
+  padding: 0;
+  width: calc(100% - 32px);
+}
+
+.guidelines-dialog::backdrop {
+  backdrop-filter: blur(3px);
+  background: rgba(15, 35, 25, .58);
+}
+
+.guidelines-dialog-header {
+  align-items: flex-start;
+  border-bottom: 1px solid #e8eee7;
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  padding: 24px 28px 18px;
+}
+
+.guidelines-dialog-header h2 {
+  color: #174b35;
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  letter-spacing: -1px;
+  margin: 8px 0 0;
+}
+
+.guidelines-close {
+  align-items: center;
+  background: #f0f3ee;
+  border: 0;
+  border-radius: 50%;
+  color: #174b35;
+  cursor: pointer;
+  display: flex;
+  font-size: 24px;
+  height: 35px;
+  justify-content: center;
+  line-height: 1;
+  width: 35px;
+}
+
+.guidelines-close:hover {
+  background: #e5ebe4;
+}
+
+.guidelines-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 28px 28px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.guidelines-content::-webkit-scrollbar {
+  display: none;
+}
+
+.guidelines-content section + section {
+  border-top: 1px solid #edf0eb;
+  margin-top: 17px;
+  padding-top: 14px;
+}
+
+.guidelines-content h3 {
+  color: #174b35;
+  font-size: 13px;
+  margin: 0 0 7px;
+}
+
+.guidelines-content p {
+  color: #68786e;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 0;
+}
+
 .wizard-forward-enter-active,
 .wizard-forward-leave-active,
 .wizard-back-enter-active,
@@ -613,6 +783,9 @@ async function submitBooking() {
   .progress-label { font-size: 8px; }
   .wizard-panel { min-height: 250px; }
   .review-card { gap: 12px; padding: 12px; }
+  .guidelines-dialog-header { padding: 20px 20px 16px; }
+  .guidelines-dialog-header h2 { font-size: 26px; }
+  .guidelines-content { padding: 17px 20px 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

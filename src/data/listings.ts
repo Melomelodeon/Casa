@@ -71,6 +71,15 @@ export function isListingFullyBooked(listing: Listing): boolean {
   return beds.length > 0 && beds.every((bed) => bed.status === 'occupied');
 }
 
+export function getRandomHighlyRatedListings(listings: Listing[], limit = 3): Listing[] {
+  const candidates = listings.filter((listing) => Number(listing.rating) >= 4.8);
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+  }
+  return candidates.slice(0, Math.max(0, limit));
+}
+
 export const defaultListingImage = 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=85';
 export const defaultFloorImage = 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85';
 export const defaultRoomImage = 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=85';

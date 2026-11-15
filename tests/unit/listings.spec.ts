@@ -1,5 +1,35 @@
-import { describe, expect, test } from 'vitest';
-import { getBookingFloors, isListingFullyBooked, mapDatabaseSpaces } from '../../src/data/listings';
+import { describe, expect, test, vi } from 'vitest';
+import {
+  getBookingFloors,
+  getRandomHighlyRatedListings,
+  isListingFullyBooked,
+  listings,
+  mapDatabaseSpaces,
+} from '../../src/data/listings';
+
+describe('featured listings', () => {
+  test('randomly selects up to three listings rated 4.8 or higher without changing the source', () => {
+    const candidates = [
+      ...listings,
+      { ...listings[0], id: 8, name: 'Extra high-rated listing' },
+      { ...listings[0], id: 9, name: 'Low-rated listing', rating: '4.7' },
+    ];
+    const originalOrder = candidates.map(({ id }) => id);
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    try {
+      const selected = getRandomHighlyRatedListings(candidates);
+
+      expect(selected).toHaveLength(3);
+      expect(selected.map(({ id }) => id)).toEqual([2, 3, 5]);
+      expect(selected.every(({ rating }) => Number(rating) >= 4.8)).toBe(true);
+      expect(candidates.map(({ id }) => id)).toEqual(originalOrder);
+      expect(getRandomHighlyRatedListings(candidates, 0)).toEqual([]);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});
 
 describe('database listings', () => {
   test('maps published spaces and their nested booking details', () => {

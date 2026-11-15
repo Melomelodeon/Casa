@@ -88,13 +88,17 @@
             <a class="view-all" href="/browse">View all stays <ion-icon :icon="arrowForwardOutline" /></a>
           </div>
 
-          <div class="stay-grid">
-            <article v-for="stay in stays" :key="stay.name" class="stay-card" data-reveal>
+          <p v-if="isLoading" class="stay-message" role="status">Finding highly rated spaces…</p>
+          <p v-else-if="listingsError" class="stay-message stay-error" role="alert">
+            Listings couldn’t be loaded: {{ listingsError }}
+            <button type="button" @click="loadListings">Try again</button>
+          </p>
+          <p v-else-if="stays.length === 0" class="stay-message">No highly rated stays are available right now.</p>
+          <div v-else class="stay-grid">
+            <a v-for="stay in stays" :key="stay.id" class="stay-card"
+              :href="`/browse?search=${encodeURIComponent(stay.name)}`" @click.prevent="openStay(stay)">
               <div class="stay-image" :style="{ backgroundImage: `url(${stay.image})` }">
                 <span class="stay-badge" v-if="stay.badge">{{ stay.badge }}</span>
-                <button class="heart-button" type="button" :aria-label="`Save ${stay.name}`">
-                  <ion-icon :icon="heartOutline" />
-                </button>
               </div>
               <div class="stay-details">
                 <div class="stay-title-row">
@@ -104,7 +108,7 @@
                 <p>{{ stay.location }}</p>
                 <div class="stay-footer"><strong>₱{{ stay.price.toLocaleString() }}<small> / month</small></strong><span>{{ stay.type }}</span></div>
               </div>
-            </article>
+            </a>
           </div>
         </section>
 
@@ -124,13 +128,13 @@ import {
   IonContent,
   IonIcon,
   IonPage,
+  onIonViewWillEnter,
 } from '@ionic/vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   arrowForwardOutline,
   chatbubbleEllipsesOutline,
-  heartOutline,
   locationOutline,
   menuOutline,
   personOutline,
@@ -140,14 +144,22 @@ import {
   star,
 } from 'ionicons/icons';
 import { useAuthUser } from '../composables/useAuthUser';
+import { usePublishedListings } from '../composables/usePublishedListings';
+import { getRandomHighlyRatedListings, type Listing } from '../data/listings';
 
 const { user } = useAuthUser();
+const { listings, isLoading, error: listingsError, loadListings } = usePublishedListings();
 const router = useRouter();
 const homeShell = ref<HTMLElement | null>(null);
 const locationSearch = ref('');
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
 const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/client');
+const stays = computed(() => getRandomHighlyRatedListings(listings.value));
 let revealObserver: IntersectionObserver | undefined;
+
+onIonViewWillEnter(() => {
+  void loadListings();
+});
 
 onMounted(() => {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
@@ -181,35 +193,9 @@ function searchListings() {
   });
 }
 
-const stays = [
-  {
-    name: 'The Greenhouse',
-    location: 'Katipunan, Quezon City',
-    price: 8500,
-    rating: '4.9',
-    type: 'Private room',
-    badge: 'Casa favorite',
-    image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=85',
-  },
-  {
-    name: 'Sage House',
-    location: 'Poblacion, Makati',
-    price: 7200,
-    rating: '4.8',
-    type: 'Bedspace',
-    badge: 'New on Casa',
-    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=85',
-  },
-  {
-    name: 'Casa Amara',
-    location: 'Cebu IT Park, Cebu',
-    price: 9800,
-    rating: '5.0',
-    type: 'Private room',
-    badge: '',
-    image: 'https://images.unsplash.com/photo-1560185008-b033106af5c3?auto=format&fit=crop&w=900&q=85',
-  },
-];
+function openStay(stay: Listing) {
+  void router.push({ name: 'Browse', query: { search: stay.name } });
+}
 </script>
 
 <style scoped>
@@ -226,8 +212,6 @@ const stays = [
 .hero-copy [data-reveal]:nth-child(3) { transition-delay: 160ms; }
 .hero-copy [data-reveal]:nth-child(4) { transition-delay: 240ms; }
 .hero-copy [data-reveal]:nth-child(5) { transition-delay: 320ms; }
-.stay-grid [data-reveal]:nth-child(2) { transition-delay: 100ms; }
-.stay-grid [data-reveal]:nth-child(3) { transition-delay: 200ms; }
 .trust-strip > [data-reveal]:nth-child(2) { transition-delay: 80ms; }
 .trust-strip > [data-reveal]:nth-child(3) { transition-delay: 160ms; }
 .trust-strip > [data-reveal]:nth-child(4) { transition-delay: 240ms; }
@@ -284,9 +268,10 @@ h1 em, h2 em { color: #e2743e; font-weight: 600; }
 .section-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 28px; }.section-heading h2 { font-size: 43px; line-height: 1.05; margin: 14px 0 0; }
 .view-all { align-items: center; color: #174b35; display: flex; font-size: 12px; font-weight: 700; gap: 8px; text-decoration: none; }.view-all ion-icon { color: #e2743e; font-size: 17px; transition: transform .2s; }.view-all:hover ion-icon { transform: translateX(4px); }
 .stay-grid { display: grid; gap: 22px; grid-template-columns: repeat(3, 1fr); }
-.stay-card { background: white; border-radius: 13px; box-shadow: 0 7px 20px rgba(36,75,57,.06); overflow: hidden; transition: box-shadow .3s, transform .3s; }.stay-card:hover { box-shadow: 0 16px 32px rgba(36,75,57,.13); transform: translateY(-7px); }
-.stay-image { background-position: center; background-size: cover; height: 205px; position: relative; }.stay-badge { background: #fbfaf7; border-radius: 5px; color: #174b35; font-size: 10px; font-weight: 700; left: 12px; padding: 7px 9px; position: absolute; top: 12px; }.heart-button { align-items: center; background: rgba(255,255,255,.88); border-radius: 50%; color: #174b35; display: flex; font-size: 18px; height: 33px; justify-content: center; position: absolute; right: 12px; top: 12px; width: 33px; }.heart-button:hover { color: #e2743e; }
+.stay-card { background: white; border-radius: 13px; box-shadow: 0 7px 20px rgba(36,75,57,.06); color: inherit; overflow: hidden; text-decoration: none; transition: box-shadow .3s, transform .3s; }.stay-card:hover, .stay-card:focus-visible { box-shadow: 0 16px 32px rgba(36,75,57,.13); transform: translateY(-7px); }.stay-card:focus-visible { outline: 2px solid #e2743e; outline-offset: 3px; }
+.stay-image { background-position: center; background-size: cover; height: 205px; position: relative; }.stay-badge { background: #fbfaf7; border-radius: 5px; color: #174b35; font-size: 10px; font-weight: 700; left: 12px; padding: 7px 9px; position: absolute; top: 12px; }
 .stay-details { padding: 15px 17px 17px; }.stay-title-row { align-items: center; display: flex; justify-content: space-between; }.stay-title-row h3 { color: #174b35; font-family: 'Playfair Display', serif; font-size: 18px; margin: 0; }.stay-rating { align-items: center; color: #174b35; display: flex; font-size: 11px; font-weight: 700; gap: 3px; }.stay-rating ion-icon { color: #e2743e; font-size: 14px; }.stay-details p { color: #87928a; font-size: 11px; margin: 6px 0 18px; }.stay-footer { align-items: end; border-top: 1px solid #eff0ec; display: flex; justify-content: space-between; padding-top: 13px; }.stay-footer strong { color: #e2743e; font-size: 16px; }.stay-footer small { color: #89938c; font-size: 10px; font-weight: 400; }.stay-footer span { color: #829088; font-size: 10px; }
+.stay-message { color: #718078; font-size: 13px; line-height: 1.6; margin: 0 0 28px; }.stay-error button { background: transparent; color: #174b35; cursor: pointer; font: inherit; font-weight: 700; margin-left: 6px; text-decoration: underline; }
 .trust-strip { align-items: center; background: #174b35; border-radius: 15px; color: white; display: grid; gap: 20px; grid-template-columns: 1.1fr repeat(3, 1fr); padding: 24px 30px; }.trust-intro { align-items: center; display: flex; gap: 14px; }.trust-intro strong { font-family: 'Playfair Display', serif; font-size: 20px; line-height: 1.1; }.mini-sparkle { color: #f4b568; font-size: 28px; }.trust-item { align-items: center; border-left: 1px solid rgba(255,255,255,.2); display: flex; gap: 11px; padding-left: 22px; }.trust-icon { align-items: center; background: rgba(255,255,255,.12); border-radius: 50%; color: #f5b66f; display: flex; font-size: 19px; height: 38px; justify-content: center; width: 38px; }.trust-item span:last-child { display: flex; flex-direction: column; }.trust-item strong { font-size: 11px; }.trust-item small { color: #b8c9bf; font-size: 9px; margin-top: 4px; }
 @media (max-width: 900px) { .home-shell { padding: 0 24px 40px; }.nav-links { gap: 15px; margin-right: 0; }.hero-section { grid-template-columns: 55% 45%; }.search-button { justify-content: center; }.hero-image { height: 330px; width: 240px; }.sun-shape { height: 280px; width: 280px; }.trust-strip { grid-template-columns: repeat(2, 1fr); }.trust-intro { grid-column: span 2; }.trust-item:nth-child(3) { border-left: 0; } }
 @media (max-width: 620px) { .home-shell { padding: 0 18px 35px; }.nav-bar { height: 75px; }.nav-links, .login-button { display: none; }.menu-button { display: flex; }.hero-section { display: flex; flex-direction: column; padding: 39px 0 55px; }.hero-copy { display: flex; flex-direction: column; }.hero-section h1 { font-size: 56px; }.hero-description { font-size: 14px; }.search-card { display: grid; grid-template-columns: 1fr auto; padding: 8px; }.search-field { border-bottom: 0; min-width: 0; padding: 11px 7px; }.search-button { grid-column: 2; margin: 0; width: auto; }.hero-visual { min-height: 365px; margin-top: 30px; }.hero-image { height: 330px; width: 250px; }.floating-rating { left: 2px; top: 37px; }.floating-location { bottom: 27px; right: 0; }.section-heading { align-items: start; flex-direction: column; gap: 20px; }.section-heading h2 { font-size: 37px; }.stay-grid { grid-template-columns: 1fr; }.stay-image { height: 230px; }.trust-strip { display: flex; flex-direction: column; align-items: stretch; padding: 25px; }.trust-intro { margin-bottom: 7px; }.trust-item { border-left: 0; border-top: 1px solid rgba(255,255,255,.2); padding: 15px 0 0; }.trust-item:nth-child(3) { border-top: 1px solid rgba(255,255,255,.2); } }
