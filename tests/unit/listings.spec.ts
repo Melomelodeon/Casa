@@ -178,6 +178,29 @@ describe('database listings', () => {
     expect(isListingFullyBooked(listing)).toBe(false);
   });
 
+  test('displays the average rating to one decimal place and leaves unrated listings blank', () => {
+    const records = [{
+      id: 21,
+      name: 'Sage House',
+      location: 'Makati',
+      type: 'Bedspace',
+      description: 'Shared student housing.',
+      monthly_rent: 7200,
+      cover_photo_url: null,
+      latitude: null,
+      longitude: null,
+      created_at: '2026-11-08T10:00:00Z',
+      floors: [],
+    }];
+    const [rated, unrated] = mapDatabaseSpaces([
+      ...records,
+      { ...records[0], id: 22, name: 'New Casa' },
+    ], [], [{ listing_id: 21, average_rating: '4.6667' }]);
+
+    expect(rated.rating).toBe('4.7');
+    expect(unrated.rating).toBe('—');
+  });
+
   test('uses the lowest bookable price across every room and floor', () => {
     const [bedspaceListing, privateRoomListing] = mapDatabaseSpaces([
       {

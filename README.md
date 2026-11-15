@@ -29,7 +29,7 @@ Registration uses Supabase Authentication. Copy `.env.example` to `.env` and set
 
 The signup form stores the selected account type and full name in the new Auth user’s metadata as `role` and `full_name`. An existing email cannot create a second account or change the role of the existing account by signing up again with a different type. If email confirmation is enabled in Supabase, users must confirm their email before signing in; signup responses are phrased neutrally because Supabase may not reveal whether the email is already registered.
 
-Run [`supabase/spaces.sql`](./supabase/spaces.sql) in the Supabase SQL Editor to create the listing hierarchy, access policies, photo bucket, and listing coordinate columns. Re-run it on existing deployments to add the coordinate columns. Running [`supabase/sample_spaces.sql`](./supabase/sample_spaces.sql) adds 15 sample listings and their related floors, rooms, and bedspaces across existing landlord accounts without deleting existing data. Re-running it skips listings with matching names and locations. Run [`supabase/bookings.sql`](./supabase/bookings.sql) to create or upgrade booking records and enable booking requests. Hosts can end an approved tenancy from the Requests page; this marks the booking completed and releases that bed or room. A signed-in user is required before checkout. The selected room or bed is reserved when the user presses Pay; the receipt then redirects to the final booking confirmation when tapped or after its 10-second timer.
+Run [`supabase/spaces.sql`](./supabase/spaces.sql) in the Supabase SQL Editor to create the listing hierarchy, access policies, photo bucket, and listing coordinate columns. Re-run it on existing deployments to add the coordinate columns. Running [`supabase/sample_spaces.sql`](./supabase/sample_spaces.sql) adds 15 sample listings and their related floors, rooms, and bedspaces across existing landlord accounts without deleting existing data. Re-running it skips listings with matching names and locations. Run or re-run [`supabase/bookings.sql`](./supabase/bookings.sql) to create or upgrade booking records, enable booking requests, and install tenant ratings. Tenants can rate an approved or completed stay, edit a saved rating, and optionally submit a rating when ending an approved stay from My Bookings. The listing cards show the average of submitted ratings. Hosts can end an approved tenancy from the Requests page; this marks the booking completed and releases that bed or room. A signed-in user is required before checkout. The selected room or bed is reserved when the user presses Pay; the receipt then redirects to the final booking confirmation when tapped or after its 10-second timer.
 
 ## System Architecture and Features
 
@@ -61,7 +61,7 @@ The listing database model uses four related tables:
 * `rooms`: Room details, layout grid, private-room amenities/rules, and optional rent.
 * `bedspaces`: Per-bed rent, grid position, amenities, rules, maintenance history, and optional photo.
 
-Authentication credentials remain in Supabase Auth. `bookings` records reservation transactions (`tenant_id`, `listing_id`, `payment_status`, `created_at`).
+Authentication credentials remain in Supabase Auth. `bookings` records reservation transactions (`tenant_id`, `listing_id`, `payment_status`, `created_at`) and an optional one-time tenant rating.
 
 ## License
 

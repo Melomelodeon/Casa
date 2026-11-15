@@ -59,9 +59,41 @@
               <p v-else-if="booking.status === 'cancelled'" class="booking-note">You cancelled this request.</p>
               <p v-else-if="booking.status === 'declined'" class="booking-note">This request was declined by the host. You can browse other available spaces.</p>
               <p v-else class="booking-note">This stay has ended.</p>
+              <section
+                v-if="booking.status === 'approved' || booking.status === 'completed'"
+                class="rating-panel"
+                :aria-label="`${booking.rating === null ? 'Rate' : 'Edit your rating for'} ${booking.listingName}`"
+              >
+                <p class="rating-prompt">
+                  {{ booking.rating === null ? 'How’s your stay going? Rate this listing.' : `Your rating: ${booking.rating} out of 5. Select stars to edit.` }}
+                </p>
+                <div class="rating-stars" role="radiogroup" :aria-label="`Choose a rating for ${booking.listingName}`">
+                  <button
+                    v-for="rating in ratingOptions"
+                    :key="rating"
+                    type="button"
+                    role="radio"
+                    :aria-label="`${rating} ${rating === 1 ? 'star' : 'stars'}`"
+                    :aria-checked="(booking.ratingDraft ?? booking.rating) === rating"
+                    :disabled="ratingSavingBookingId === booking.id"
+                    @click="booking.ratingDraft = rating"
+                  >
+                    <ion-icon :icon="star" :class="{ 'star-filled': rating <= (booking.ratingDraft ?? booking.rating ?? 0) }" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="save-rating-button"
+                  :disabled="booking.ratingDraft === null || booking.ratingDraft === booking.rating || ratingSavingBookingId === booking.id"
+                  @click="saveRating(booking)"
+                >
+                  {{ ratingSavingBookingId === booking.id ? 'Saving…' : booking.rating === null ? 'Save rating' : 'Update rating' }}
+                </button>
+                <p v-if="ratingErrorBookingId === booking.id" class="rating-error" role="alert">{{ ratingErrorMessage }}</p>
+              </section>
               <div v-if="booking.status === 'pending' || booking.status === 'approved'" class="booking-actions">
                 <button type="button" class="end-booking-button" :disabled="updatingBookingId === booking.id" @click="confirmEndBooking(booking)">
-                  {{ updatingBookingId === booking.id ? 'Updating…' : booking.status === 'pending' ? 'Cancel request' : 'End stay early' }}
+                  {{ updatingBookingId === booking.id ? 'Updating…' : booking.status === 'pending' ? 'Cancel request' : 'End stay' }}
                 </button>
               </div>
             </article>
@@ -87,14 +119,36 @@
               If you have already paid, contact the host to arrange any refund.
             </template>
           </p>
+          <div v-if="bookingToEnd.status === 'approved'" class="end-rating-prompt">
+            <p class="rating-prompt">
+              {{ bookingToEnd.rating === null ? 'Leave a rating before you end your stay? (optional)' : 'Change your rating before ending your stay? (optional)' }}
+            </p>
+            <div class="rating-stars" role="radiogroup" :aria-label="`Choose a rating for ${bookingToEnd.listingName}`">
+              <button
+                v-for="rating in ratingOptions"
+                :key="rating"
+                type="button"
+                role="radio"
+                :aria-label="`${rating} ${rating === 1 ? 'star' : 'stars'}`"
+                :aria-checked="(bookingToEnd.ratingDraft ?? bookingToEnd.rating) === rating"
+                :disabled="updatingBookingId === bookingToEnd.id"
+                @click="bookingToEnd.ratingDraft = rating"
+              >
+                <ion-icon :icon="star" :class="{ 'star-filled': rating <= (bookingToEnd.ratingDraft ?? bookingToEnd.rating ?? 0) }" />
+              </button>
+            </div>
+          </div>
           <p v-if="errorMessage" class="dialog-error" role="alert">{{ errorMessage }}</p>
           <div class="confirmation-actions">
             <button type="button" class="keep-booking-button" :disabled="updatingBookingId !== null" @click="closeEndBooking">Keep booking</button>
             <button type="button" class="confirm-end-button" :disabled="updatingBookingId === bookingToEnd.id" @click="endBooking">
-              {{ updatingBookingId === bookingToEnd.id ? 'Updating…' : bookingToEnd.status === 'pending' ? 'Cancel request' : 'End stay early' }}
+              {{ updatingBookingId === bookingToEnd.id ? 'Updating…' : bookingToEnd.status === 'pending' ? 'Cancel request' : 'End stay' }}
             </button>
           </div>
         </section>
+      </div>
+      <div v-if="confettiBookingId !== null" class="confetti-burst" aria-hidden="true">
+        <span v-for="piece in confettiPieces" :key="piece" class="confetti-piece" :style="{ left: `${(piece * 37) % 101}%`, animationDelay: `${(piece % 6) * 0.06}s` }" />
       </div>
     </ion-content>
   </ion-page>
@@ -104,7 +158,7 @@
 import { onIonViewWillEnter } from '@ionic/vue';
 import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { computed, onUnmounted, ref } from 'vue';
-import { searchOutline } from 'ionicons/icons';
+import { searchOutline, star } from 'ionicons/icons';
 import { useAuthUser } from '../composables/useAuthUser';
 import { useLogout } from '../composables/useLogout';
 import { getSupabaseClient } from '../lib/supabase';
@@ -120,6 +174,7 @@ type BookingRow = {
   request_status: string;
   move_in_date: string | null;
   amount: number | null;
+  rating: number | null;
   created_at: string;
 };
 type BookingSpaceRow = {
@@ -138,6 +193,8 @@ type ClientBooking = {
   amount: number | null;
   paymentStatus: string;
   status: BookingStatus;
+  rating: number | null;
+  ratingDraft: number | null;
 };
 
 const { user } = useAuthUser();
@@ -151,9 +208,16 @@ const errorMessage = ref('');
 const notice = ref('');
 const bookingToEnd = ref<ClientBooking | null>(null);
 const updatingBookingId = ref<number | null>(null);
+const ratingSavingBookingId = ref<number | null>(null);
+const ratingErrorBookingId = ref<number | null>(null);
+const ratingErrorMessage = ref('');
+const confettiBookingId = ref<number | null>(null);
+const ratingOptions = [1, 2, 3, 4, 5];
+const confettiPieces = Array.from({ length: 28 }, (_, index) => index);
 const shouldAnimate = ref(false);
 const highlightedBookingId = ref<number | null>(null);
 let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
+let confettiTimeout: ReturnType<typeof setTimeout> | undefined;
 const pendingCount = computed(() => bookings.value.filter((booking) => booking.status === 'pending').length);
 const approvedCount = computed(() => bookings.value.filter((booking) => booking.status === 'approved').length);
 const tabs = computed(() => [
@@ -216,6 +280,8 @@ function mapBooking(booking: BookingRow, listing: BookingSpaceRow | undefined): 
     amount: booking.amount,
     paymentStatus: booking.payment_status,
     status,
+    rating: booking.rating === null ? null : Number(booking.rating),
+    ratingDraft: booking.rating === null ? null : Number(booking.rating),
   };
 }
 
@@ -230,7 +296,7 @@ async function loadBookings() {
     if (!account) throw new Error('Sign in to view your bookings.');
 
     const { data: bookingData, error: bookingError } = await client.from('bookings')
-      .select('id, listing_id, room_id, bedspace_id, payment_status, request_status, move_in_date, amount, created_at')
+      .select('id, listing_id, room_id, bedspace_id, payment_status, request_status, move_in_date, amount, rating, created_at')
       .eq('tenant_id', account.id)
       .order('created_at', { ascending: false });
     if (bookingError) throw bookingError;
@@ -258,6 +324,39 @@ async function loadBookings() {
   }
 }
 
+async function saveRating(booking: ClientBooking) {
+  const rating = booking.ratingDraft;
+  if ((booking.status !== 'approved' && booking.status !== 'completed')
+    || rating === null
+    || rating === booking.rating
+    || ratingSavingBookingId.value !== null) return;
+  const isEditing = booking.rating !== null;
+  ratingSavingBookingId.value = booking.id;
+  ratingErrorBookingId.value = null;
+  ratingErrorMessage.value = '';
+  try {
+    const { error } = await getSupabaseClient().rpc('rate_tenant_booking', {
+      p_booking_id: booking.id,
+      p_rating: rating,
+    });
+    if (error) throw error;
+    booking.rating = rating;
+    notice.value = isEditing ? 'Your rating has been updated.' : 'Thanks for rating your stay!';
+    confettiBookingId.value = booking.id;
+    if (confettiTimeout) clearTimeout(confettiTimeout);
+    confettiTimeout = setTimeout(() => {
+      confettiBookingId.value = null;
+      confettiTimeout = undefined;
+    }, 2800);
+    window.dispatchEvent(new Event('casa:booking-completed'));
+  } catch (error) {
+    ratingErrorBookingId.value = booking.id;
+    ratingErrorMessage.value = `Your rating couldn’t be saved: ${getErrorMessage(error)}`;
+  } finally {
+    ratingSavingBookingId.value = null;
+  }
+}
+
 function confirmEndBooking(booking: ClientBooking) {
   errorMessage.value = '';
   bookingToEnd.value = booking;
@@ -265,6 +364,9 @@ function confirmEndBooking(booking: ClientBooking) {
 
 function closeEndBooking() {
   if (updatingBookingId.value !== null) return;
+  if (bookingToEnd.value?.status === 'approved') {
+    bookingToEnd.value.ratingDraft = bookingToEnd.value.rating;
+  }
   bookingToEnd.value = null;
 }
 
@@ -275,11 +377,29 @@ async function endBooking() {
   errorMessage.value = '';
   notice.value = '';
   try {
-    const { error } = await getSupabaseClient().rpc('end_tenant_booking', { p_booking_id: booking.id });
-    if (error) throw error;
     const wasPending = booking.status === 'pending';
+    const ratingToSave = wasPending ? null : booking.ratingDraft;
+    const ratingChanged = ratingToSave !== null && ratingToSave !== booking.rating;
+    const { error } = await getSupabaseClient().rpc('end_tenant_booking', {
+      p_booking_id: booking.id,
+      p_rating: ratingToSave,
+    });
+    if (error) throw error;
+    if (ratingChanged) {
+      booking.rating = ratingToSave;
+      confettiBookingId.value = booking.id;
+      if (confettiTimeout) clearTimeout(confettiTimeout);
+      confettiTimeout = setTimeout(() => {
+        confettiBookingId.value = null;
+        confettiTimeout = undefined;
+      }, 2800);
+    }
     booking.status = wasPending ? 'cancelled' : 'completed';
-    notice.value = wasPending ? 'Your booking request has been cancelled.' : 'Your stay has been ended.';
+    notice.value = wasPending
+      ? 'Your booking request has been cancelled.'
+      : ratingChanged
+        ? 'Your stay has ended and your rating was saved.'
+        : 'Your stay has been ended.';
     highlightedBookingId.value = booking.id;
     if (highlightTimeout) clearTimeout(highlightTimeout);
     highlightTimeout = setTimeout(() => {
@@ -302,6 +422,7 @@ onIonViewWillEnter(() => {
 });
 onUnmounted(() => {
   if (highlightTimeout) clearTimeout(highlightTimeout);
+  if (confettiTimeout) clearTimeout(confettiTimeout);
 });
 </script>
 
@@ -380,6 +501,24 @@ h1, h2, h3, p { margin-top: 0; }
 .payment-status.paid { color: #2f6a4b; }
 .booking-note { margin: 14px 0 0; color: #818d83; font-size: 11px; line-height: 1.5; }
 .approved-note { color: #3c7252; }
+.rating-panel { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 16px; padding: 14px 16px; border: 1px solid #e8eee8; border-radius: 9px; background: #fbfcfa; }
+.rating-prompt { margin: 0; color: #53675a; font-size: 11px; }
+.rating-stars, .rating-result { display: flex; align-items: center; gap: 3px; }
+.rating-stars button { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; border-radius: 5px; color: #c9d0ca; background: transparent; font-size: 20px; cursor: pointer; }
+.rating-stars button:hover, .rating-stars button:focus-visible { background: #fff2df; outline: 2px solid #e9985d; outline-offset: 1px; }
+.rating-stars button:disabled { cursor: wait; opacity: .6; }
+.star-filled { color: #e2743e; }
+.rating-result { color: #e2743e; font-size: 17px; }
+.rating-result span { margin-left: 6px; color: #53675a; font-size: 11px; font-weight: 600; }
+.save-rating-button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 6px; color: #fff; background: #20583c; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; }
+.save-rating-button:disabled { cursor: not-allowed; opacity: .5; }
+.rating-error { flex-basis: 100%; margin: 0; color: #a84c43; font-size: 11px; }
+.confetti-burst { position: fixed; z-index: 30; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti-piece { position: absolute; top: -12px; width: 9px; height: 13px; border-radius: 2px; background: #e2743e; animation: confetti-fall 2.4s ease-in forwards; }
+.confetti-piece:nth-child(3n) { background: #f3c15d; }
+.confetti-piece:nth-child(3n + 1) { background: #36734e; }
+.confetti-piece:nth-child(4n) { width: 7px; height: 7px; border-radius: 50%; }
+@keyframes confetti-fall { to { transform: translateY(110vh) rotate(760deg); } }
 .data-message { padding: 18px; border: 1px solid #e7ece6; border-radius: 10px; color: #68766d; background: #fff; font-size: 13px; }
 .error-message { color: #a84c43; }
 .success-message { color: #2f6a4b; }
@@ -394,6 +533,8 @@ h1, h2, h3, p { margin-top: 0; }
 .confirmation-dialog p { margin-bottom: 23px; color: #758178; font-size: 13px; line-height: 1.65; }
 .confirmation-dialog .dialog-error { margin: -8px 0 16px; color: #a84c43; font-size: 12px; }
 .confirmation-dialog strong { color: #385340; }
+.end-rating-prompt { margin: -4px 0 18px; }
+.end-rating-prompt .rating-prompt { margin-bottom: 8px; color: #53675a; font-size: 11px; }
 .confirmation-actions { display: flex; justify-content: flex-end; gap: 9px; }
 .confirmation-actions button { min-height: 38px; padding: 0 13px; border-radius: 7px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .keep-booking-button { border: 1px solid #e1e7e1; color: #526357; background: #fff; }
@@ -438,6 +579,7 @@ h1, h2, h3, p { margin-top: 0; }
   .page-enter .booking-card,
   .page-enter .empty-state,
   .page-enter .data-message,
-  .booking-card-highlight { animation-duration: .01ms; animation-delay: 0ms !important; }
+  .booking-card-highlight,
+  .confetti-piece { animation-duration: .01ms; animation-delay: 0ms !important; }
 }
 </style>

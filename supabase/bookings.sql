@@ -17,6 +17,15 @@ alter table public.bookings
   add column if not exists amount numeric(10, 2),
   add column if not exists receipt_token uuid;
 
+alter table public.bookings
+  add column if not exists rating smallint;
+
+alter table public.bookings
+  drop constraint if exists bookings_rating_range_check;
+alter table public.bookings
+  add constraint bookings_rating_range_check
+  check (rating is null or rating between 1 and 5);
+
 create unique index if not exists bookings_receipt_token_idx
   on public.bookings(receipt_token)
   where receipt_token is not null;
@@ -148,7 +157,11 @@ $$;
 revoke all on function public.end_host_tenancy(bigint) from public;
 grant execute on function public.end_host_tenancy(bigint) to authenticated;
 
-create or replace function public.end_tenant_booking(p_booking_id bigint)
+drop function if exists public.end_tenant_booking(bigint);
+create or replace function public.end_tenant_booking(
+  p_booking_id bigint,
+  p_rating integer default null
+)
 returns void
 language plpgsql
 security definer
@@ -162,6 +175,10 @@ declare
 begin
   if current_user_id is null then
     raise exception 'Sign in to update this booking.';
+  end if;
+
+  if p_rating is not null and (p_rating < 1 or p_rating > 5) then
+    raise exception 'Choose a rating from 1 to 5 stars.';
   end if;
 
   select b.tenant_id, b.request_status
@@ -179,6 +196,9 @@ begin
   end if;
 
   if current_status = 'pending' then
+    if p_rating is not null then
+      raise exception 'A pending request cannot include a stay rating.';
+    end if;
     next_status := 'cancelled';
   elsif current_status = 'approved' then
     next_status := 'completed';
@@ -187,13 +207,14 @@ begin
   end if;
 
   update public.bookings
-  set request_status = next_status
+  set request_status = next_status,
+      rating = coalesce(p_rating::smallint, rating)
   where id = p_booking_id;
 end;
 $$;
 
-revoke all on function public.end_tenant_booking(bigint) from public;
-grant execute on function public.end_tenant_booking(bigint) to authenticated;
+revoke all on function public.end_tenant_booking(bigint, integer) from public;
+grant execute on function public.end_tenant_booking(bigint, integer) to authenticated;
 
 create or replace function public.get_booked_listing_spaces()
 returns table(room_id bigint, bedspace_id bigint)
@@ -368,5 +389,68 @@ $$;
 revoke all on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) from public;
 grant execute on function public.confirm_booking_after_payment(uuid, bigint, bigint, bigint, text, text, date, text) to authenticated;
 drop function if exists public.complete_booking_after_receipt(uuid, bigint, bigint, bigint, text, text, date, text);
+
+create or replace function public.rate_tenant_booking(
+  p_booking_id bigint,
+  p_rating integer
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  booking_tenant_id uuid;
+  booking_status text;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in to rate this stay.';
+  end if;
+
+  if p_rating is null or p_rating < 1 or p_rating > 5 then
+    raise exception 'Choose a rating from 1 to 5 stars.';
+  end if;
+
+  select b.tenant_id, b.request_status
+  into booking_tenant_id, booking_status
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found or booking_tenant_id <> current_user_id then
+    raise exception 'You do not have permission to rate this stay.';
+  end if;
+
+  if booking_status not in ('approved', 'completed') then
+    raise exception 'Only an approved or completed stay can be rated.';
+  end if;
+
+  update public.bookings
+  set rating = p_rating::smallint
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.rate_tenant_booking(bigint, integer) from public;
+grant execute on function public.rate_tenant_booking(bigint, integer) to authenticated;
+
+create or replace function public.get_space_rating_averages()
+returns table(listing_id bigint, average_rating numeric)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select b.listing_id, round(avg(b.rating)::numeric, 1)
+  from public.bookings b
+  join public.spaces s on s.id = b.listing_id
+  where s.status = 'published'
+    and b.rating is not null
+  group by b.listing_id;
+$$;
+
+revoke all on function public.get_space_rating_averages() from public;
+grant execute on function public.get_space_rating_averages() to anon, authenticated;
 
 notify pgrst, 'reload schema';

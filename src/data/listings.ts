@@ -124,12 +124,22 @@ type DatabaseSpace = {
   floors: DatabaseFloor[];
 };
 
+export type SpaceRatingSummary = {
+  listing_id: number;
+  average_rating: number | string;
+};
+
 export function mapDatabaseSpaces(
   records: DatabaseSpace[],
   bookedSpaces: { room_id: number; bedspace_id: number | null }[] = [],
+  ratingSummaries: SpaceRatingSummary[] = [],
 ): Listing[] {
   const bookedRoomIds = new Set(bookedSpaces.filter((space) => space.bedspace_id === null).map((space) => String(space.room_id)));
   const bookedBedspaceIds = new Set(bookedSpaces.flatMap((space) => space.bedspace_id === null ? [] : [String(space.bedspace_id)]));
+  const ratingsByListingId = new Map(ratingSummaries.map(({ listing_id, average_rating }) => [
+    listing_id,
+    Number(average_rating).toFixed(1),
+  ]));
   return records.map((space) => {
     const includedAmenities = new Set<string>();
     const houseRules = new Set<string>();
@@ -194,7 +204,7 @@ export function mapDatabaseSpaces(
       price: validBookablePrices.length > 0
         ? Math.min(...validBookablePrices)
         : Number(space.monthly_rent),
-      rating: '—',
+      rating: ratingsByListingId.get(space.id) ?? '—',
       type: space.type,
       amenities: includedAmenities.size,
       includedAmenities: [...includedAmenities],

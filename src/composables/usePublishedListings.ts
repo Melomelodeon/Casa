@@ -22,7 +22,11 @@ export function usePublishedListings() {
 
     try {
       const client = getSupabaseClient();
-      const [{ data, error: queryError }, { data: bookedSpaces, error: availabilityError }] = await Promise.all([
+      const [
+        { data, error: queryError },
+        { data: bookedSpaces, error: availabilityError },
+        { data: ratingSummaries, error: ratingsError },
+      ] = await Promise.all([
         client
         .from('spaces')
         .select(`
@@ -41,11 +45,13 @@ export function usePublishedListings() {
         .eq('status', 'published')
         .order('created_at', { ascending: false }),
         client.rpc('get_booked_listing_spaces'),
+        client.rpc('get_space_rating_averages'),
       ]);
 
       if (queryError) throw queryError;
       if (availabilityError) throw availabilityError;
-      listings.value = mapDatabaseSpaces(data ?? [], bookedSpaces ?? []);
+      if (ratingsError) throw ratingsError;
+      listings.value = mapDatabaseSpaces(data ?? [], bookedSpaces ?? [], ratingSummaries ?? []);
     } catch (loadError) {
       error.value = getErrorMessage(loadError);
     } finally {
