@@ -62,7 +62,9 @@
                   accept="image/png,image/jpeg,image/webp,image/gif" @change="handleCoverPhoto" /><img v-if="coverPhotoPreview || existingListing?.coverPhotoUrl" class="photo-preview" :src="coverPhotoPreview || existingListing?.coverPhotoUrl || ''" alt="Cover photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                     coverPhotoName || 'Drop cover photo here or browse' }}</strong><span class="photo-upload-hint">PNG or
                       JPG · 1 photo</span><small>{{ coverPhoto ? 'Cover photo selected' : coverPhotoName ? 'Current photo will be kept' : 'Choose cover photo'
-                  }}</small></span></label>
+                  }}</small><button type="button" class="camera-capture-button" :disabled="capturingPhotoTarget === 'cover'"
+                    @click.stop="capturePhoto('cover')"><ion-icon :icon="cameraOutline" />{{ capturingPhotoTarget === 'cover' ? 'Opening camera…' : 'Take photo' }}</button>
+                <small v-if="photoCaptureError" class="photo-capture-error" role="alert">{{ photoCaptureError }}</small></span></label>
           </section>
           <section v-if="currentStep === 2" class="form-card">
             <div class="section-heading"><span class="section-number">02</span>
@@ -82,7 +84,10 @@
             <label class="floor-photo-field"><span class="photo-field-label">Floor photo</span><span class="photo-dropzone"><input type="file"
               accept="image/png,image/jpeg,image/webp,image/gif" @change="handleFloorPhoto" /><img v-if="floorPhotoPreview || activeFloor.floorPhotoUrl" class="photo-preview" :src="floorPhotoPreview || activeFloor.floorPhotoUrl || ''" alt="Floor photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                 floorPhotoName || 'Drop floor photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
-                floorPhoto ? 'Floor photo selected' : floorPhotoName ? 'Current photo will be kept' : 'Choose floor photo' }}</small></span></label>
+                floorPhoto ? 'Floor photo selected' : floorPhotoName ? 'Current photo will be kept' : 'Choose floor photo' }}</small>
+              <button type="button" class="camera-capture-button" :disabled="capturingPhotoTarget === 'floor'"
+                @click.stop="capturePhoto('floor')"><ion-icon :icon="cameraOutline" />{{ capturingPhotoTarget === 'floor' ? 'Opening camera…' : 'Take photo' }}</button>
+              <small v-if="photoCaptureError" class="photo-capture-error" role="alert">{{ photoCaptureError }}</small></span></label>
           </section>
           <section v-if="currentStep === 3" class="form-card">
             <div class="section-heading"><span class="section-number">03</span>
@@ -109,7 +114,10 @@
             <label class="room-photo-field"><span class="photo-field-label">Room photo</span><span class="photo-dropzone"><input type="file"
               accept="image/png,image/jpeg,image/webp,image/gif" @change="handleRoomPhoto" /><img v-if="roomPhotoPreview || activeRoom.roomPhotoUrl" class="photo-preview" :src="roomPhotoPreview || activeRoom.roomPhotoUrl || ''" alt="Room photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{
                 roomPhotoName || 'Drop room photo here or browse' }}</strong><span class="photo-upload-hint">PNG or JPG · 1 photo</span><small>{{
-                roomPhoto ? 'Room photo selected' : roomPhotoName ? 'Current photo will be kept' : 'Choose room photo' }}</small></span></label>
+                roomPhoto ? 'Room photo selected' : roomPhotoName ? 'Current photo will be kept' : 'Choose room photo' }}</small>
+              <button type="button" class="camera-capture-button" :disabled="capturingPhotoTarget === 'room'"
+                @click.stop="capturePhoto('room')"><ion-icon :icon="cameraOutline" />{{ capturingPhotoTarget === 'room' ? 'Opening camera…' : 'Take photo' }}</button>
+              <small v-if="photoCaptureError" class="photo-capture-error" role="alert">{{ photoCaptureError }}</small></span></label>
             <template v-if="form.type === 'Private room'">
               <div class="field-grid private-room-space-details">
                 <label>Monthly rent<input v-model="privateRoomRentText" required type="text" inputmode="decimal" placeholder="8,500" @input="updateRentInput($event, 'private-room')" @focus="privateRoomRentText = String(privateRoomSpace.price || '')" @blur="formatRentInput($event, 'private-room')" /></label>
@@ -248,6 +256,9 @@
               <img v-if="bedspacePhotoPreview || bedspaceDraft.photoUrl" class="photo-preview" :src="bedspacePhotoPreview || bedspaceDraft.photoUrl || ''" alt="Bedspace photo preview" /><ion-icon v-else :icon="cloudUploadOutline" /><strong>{{ bedspaceDraft.image?.name || (bedspaceDraft.photoUrl ? 'Current photo saved' : 'Drop bedspace photo here or browse') }}</strong>
               <span class="photo-upload-hint">PNG or JPG · 1 photo</span>
               <small>{{ bedspaceDraft.image ? 'Bedspace photo selected' : bedspaceDraft.photoUrl ? 'Current photo will be kept' : 'Choose bedspace photo' }}</small>
+              <button type="button" class="camera-capture-button" :disabled="capturingPhotoTarget === 'bedspace'"
+                @click.stop="capturePhoto('bedspace')"><ion-icon :icon="cameraOutline" />{{ capturingPhotoTarget === 'bedspace' ? 'Opening camera…' : 'Take photo' }}</button>
+              <small v-if="photoCaptureError" class="photo-capture-error" role="alert">{{ photoCaptureError }}</small>
             </span></label>
             <fieldset class="detail-list">
               <legend>Amenities included</legend>
@@ -312,7 +323,8 @@ import { IonContent, IonIcon, IonPage } from '@ionic/vue';
 import { useRoute } from 'vue-router';
 import L, { type Map as LeafletMap, type Marker } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { addOutline, arrowForwardOutline, bedOutline, checkmarkOutline, cloudUploadOutline, enterOutline, informationCircleOutline } from 'ionicons/icons';
+import { Camera } from '@capacitor/camera';
+import { addOutline, arrowForwardOutline, bedOutline, cameraOutline, checkmarkOutline, cloudUploadOutline, enterOutline, informationCircleOutline } from 'ionicons/icons';
 import { useLogout } from '../composables/useLogout';
 import { useAuthUser } from '../composables/useAuthUser';
 import { getSupabaseClient } from '../lib/supabase';
@@ -338,6 +350,7 @@ let reverseGeocodeTimer: ReturnType<typeof setTimeout> | undefined;
 let hasSelectedLocation = false;
 const totalSteps = computed(() => form.type === 'Private room' ? 3 : 4);
 const bedspaceDraft = reactive({ name: '', price: 0, image: null as File | null, photoUrl: null as string | null, amenities: [''], houseRules: [''], maintenance: [''] });
+type PhotoTarget = 'cover' | 'floor' | 'room' | 'bedspace';
 const privateRoomRentText = ref('');
 const bedspaceRentText = ref('');
 type BedspaceDraft = { id: number; row: number; column: number; name: string; price: number; image: File | null; photoUrl?: string | null; amenities: string[]; houseRules: string[]; maintenance: string[] };
@@ -432,6 +445,8 @@ const coverPhotoPreview = ref('');
 const floorPhotoPreview = ref('');
 const roomPhotoPreview = ref('');
 const bedspacePhotoPreview = ref('');
+const capturingPhotoTarget = ref<PhotoTarget | null>(null);
+const photoCaptureError = ref('');
 const coverPhotoName = ref('');
 const submitted = ref(false);
 const isLoadingListing = ref(isEditMode);
@@ -624,27 +639,72 @@ watch(gridColumns, (value) => {
   gridColumns.value = Math.max(occupiedColumns, Math.floor(Number(value) || 1));
 });
 function handleCoverPhoto(event: Event) {
-  const input = event.target as HTMLInputElement;
-  coverPhoto.value = input.files?.[0] ?? null;
-  coverPhotoName.value = coverPhoto.value?.name || '';
-  setPhotoPreview(coverPhotoPreview, coverPhoto.value);
+  setPhotoFile('cover', getSelectedPhoto(event));
 }
 function handleFloorPhoto(event: Event) {
-  const input = event.target as HTMLInputElement;
-  floorPhoto.value = input.files?.[0] ?? null;
-  floorPhotoName.value = floorPhoto.value?.name || '';
-  setPhotoPreview(floorPhotoPreview, floorPhoto.value);
+  setPhotoFile('floor', getSelectedPhoto(event));
 }
 function handleRoomPhoto(event: Event) {
-  const input = event.target as HTMLInputElement;
-  roomPhoto.value = input.files?.[0] ?? null;
-  roomPhotoName.value = roomPhoto.value?.name || '';
-  setPhotoPreview(roomPhotoPreview, roomPhoto.value);
+  setPhotoFile('room', getSelectedPhoto(event));
 }
 function handleBedspacePhoto(event: Event) {
-  const input = event.target as HTMLInputElement;
-  bedspaceDraft.image = input.files?.[0] ?? null;
-  setPhotoPreview(bedspacePhotoPreview, bedspaceDraft.image);
+  setPhotoFile('bedspace', getSelectedPhoto(event));
+}
+function getSelectedPhoto(event: Event): File | null {
+  return (event.target as HTMLInputElement).files?.[0] ?? null;
+}
+function setPhotoFile(target: PhotoTarget, file: File | null) {
+  photoCaptureError.value = '';
+  switch (target) {
+    case 'cover':
+      coverPhoto.value = file;
+      coverPhotoName.value = file?.name || '';
+      setPhotoPreview(coverPhotoPreview, file);
+      break;
+    case 'floor':
+      floorPhoto.value = file;
+      floorPhotoName.value = file?.name || '';
+      setPhotoPreview(floorPhotoPreview, file);
+      break;
+    case 'room':
+      roomPhoto.value = file;
+      roomPhotoName.value = file?.name || '';
+      setPhotoPreview(roomPhotoPreview, file);
+      break;
+    case 'bedspace':
+      bedspaceDraft.image = file;
+      setPhotoPreview(bedspacePhotoPreview, file);
+      break;
+  }
+}
+async function capturePhoto(target: PhotoTarget) {
+  if (capturingPhotoTarget.value) return;
+  capturingPhotoTarget.value = target;
+  photoCaptureError.value = '';
+  try {
+    const photo = await Camera.takePhoto({ quality: 85 });
+    const photoPath = photo.webPath || photo.uri;
+    if (!photoPath) throw new Error('The camera did not return an image.');
+
+    const response = await fetch(photoPath);
+    if (!response.ok) throw new Error(`Unable to read the captured photo (${response.status}).`);
+    const image = await response.blob();
+    const mimeType = image.type.startsWith('image/') ? image.type : 'image/jpeg';
+    const extensionByMimeType: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const extension = extensionByMimeType[mimeType];
+    if (!extension) throw new Error('The captured photo format is not supported.');
+    setPhotoFile(target, new File([image], `casa-${target}-${Date.now()}.${extension}`, { type: mimeType }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to capture a photo.';
+    if (!/cancel(?:led|ed)?/i.test(message)) photoCaptureError.value = message;
+  } finally {
+    capturingPhotoTarget.value = null;
+  }
 }
 function setPhotoPreview(preview: { value: string }, file: File | null) {
   revokePhotoPreview(preview);
@@ -1737,6 +1797,37 @@ fieldset legend {
   color: #e2743e;
   font-size: 10px;
   font-weight: 700;
+}
+
+.camera-capture-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe8de;
+  border-radius: 999px;
+  color: #174b35;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  padding: 9px 14px;
+}
+
+.camera-capture-button:hover,
+.camera-capture-button:focus-visible {
+  border-color: #e2743e;
+  color: #c95f2d;
+}
+
+.camera-capture-button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.photo-capture-error {
+  color: #a4472a !important;
 }
 
 .upload-area {
