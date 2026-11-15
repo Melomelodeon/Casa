@@ -22,7 +22,7 @@ alter table public.bookings
   drop constraint if exists bookings_refund_status_check;
 alter table public.bookings
   add constraint bookings_refund_status_check
-  check (refund_status in ('none', 'pending', 'refunded'));
+  check (refund_status in ('none', 'pending', 'refunded', 'rejected'));
 
 alter table public.bookings
   add column if not exists rating smallint;
@@ -308,6 +308,50 @@ $$;
 
 revoke all on function public.issue_host_booking_refund(bigint) from public;
 grant execute on function public.issue_host_booking_refund(bigint) to authenticated;
+
+create or replace function public.reject_host_booking_refund(p_booking_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_listing_id bigint;
+  booking_status text;
+  booking_refund_status text;
+  booking_amount numeric(10, 2);
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in to reject a refund request.';
+  end if;
+
+  select b.listing_id, b.request_status, b.refund_status, b.amount
+  into target_listing_id, booking_status, booking_refund_status, booking_amount
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'This booking no longer exists.';
+  end if;
+
+  if not public.owns_space(target_listing_id) then
+    raise exception 'You do not have permission to reject a refund for this booking.';
+  end if;
+
+  if booking_status <> 'cancelled' or booking_refund_status <> 'pending'
+    or booking_amount is null or booking_amount <= 0 then
+    raise exception 'Only a cancelled booking with a pending refund request can be rejected.';
+  end if;
+
+  update public.bookings
+  set refund_status = 'rejected'
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.reject_host_booking_refund(bigint) from public;
+grant execute on function public.reject_host_booking_refund(bigint) to authenticated;
 
 create or replace function public.get_booked_listing_spaces()
 returns table(room_id bigint, bedspace_id bigint)

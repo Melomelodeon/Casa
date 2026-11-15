@@ -49,7 +49,7 @@
                   <h3>{{ booking.listingName }}</h3>
                   <p class="listing-location">{{ booking.location }}</p>
                 </div>
-                <span class="request-status" :class="[booking.status, booking.refundStatus]">{{ statusLabel(booking.status) }}</span>
+                <span class="request-status" :class="[booking.status, booking.refundStatus]">{{ booking.status === 'cancelled' && booking.refundStatus === 'pending' ? 'Refund pending' : booking.status === 'cancelled' && booking.refundStatus === 'refunded' ? 'Refunded' : booking.status === 'cancelled' && booking.refundStatus === 'rejected' ? 'Refund denied' : statusLabel(booking.status) }}</span>
               </div>
               <div class="booking-details">
                 <div><small>Space</small><strong>{{ booking.spaceName }}</strong></div>
@@ -61,6 +61,7 @@
               <p v-else-if="booking.status === 'approved'" class="booking-note approved-note">Your stay is approved. Contact the host if you need to coordinate your move-in.</p>
               <p v-else-if="booking.status === 'cancelled' && booking.refundStatus === 'pending'" class="booking-note refund-note">Your refund request for {{ formatRefundAmount(booking.amount) }} is pending host approval.</p>
               <p v-else-if="booking.status === 'cancelled' && booking.refundStatus === 'refunded'" class="booking-note refund-note">Your refund of {{ formatRefundAmount(booking.amount) }} has been issued.</p>
+              <p v-else-if="booking.status === 'cancelled' && booking.refundStatus === 'rejected'" class="booking-note refund-rejected-note">Your refund request was denied by the host. The payment remains unchanged.</p>
               <p v-else-if="booking.status === 'cancelled'" class="booking-note">You cancelled this request.</p>
               <p v-else-if="booking.status === 'declined'" class="booking-note">This request was declined by the host. You can browse other available spaces.</p>
               <p v-else class="booking-note">This stay has ended.</p>
@@ -209,7 +210,7 @@ import { getSupabaseClient } from '../lib/supabase';
 
 type BookingStatus = 'pending' | 'approved' | 'declined' | 'completed' | 'cancelled';
 type BookingTab = 'all' | 'current' | 'past';
-type RefundStatus = 'none' | 'pending' | 'refunded';
+type RefundStatus = 'none' | 'pending' | 'refunded' | 'rejected';
 type BookingRow = {
   id: number;
   listing_id: number;
@@ -355,7 +356,7 @@ function mapBooking(booking: BookingRow, listing: BookingSpaceRow | undefined): 
     requestedAt: formatRequestedAt(booking.created_at),
     amount: booking.amount,
     paymentStatus: booking.payment_status,
-    refundStatus: booking.refund_status === 'pending' || booking.refund_status === 'refunded' ? booking.refund_status : 'none',
+    refundStatus: booking.refund_status === 'pending' || booking.refund_status === 'refunded' || booking.refund_status === 'rejected' ? booking.refund_status : 'none',
     status,
     rating: booking.rating === null ? null : Number(booking.rating),
     ratingDraft: booking.rating === null ? null : Number(booking.rating),
@@ -614,6 +615,7 @@ h1, h2, h3, p { margin-top: 0; }
 .request-status.cancelled { color: #68766d; background: #eff2ef; }
 .request-status.pending.refunded, .request-status.cancelled.refunded { color: #2f6a4b; background: #e9f4ec; }
 .request-status.cancelled.pending { color: #94672f; background: #fff4e3; }
+.request-status.cancelled.rejected { color: #a84c43; background: #fbefed; }
 .request-status.completed { color: #68766d; background: #eff2ef; }
 .booking-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 21px; padding: 17px 0; border-top: 1px solid #eef0ed; border-bottom: 1px solid #eef0ed; }
 .booking-details div { display: grid; align-content: start; gap: 6px; }
@@ -624,6 +626,7 @@ h1, h2, h3, p { margin-top: 0; }
 .booking-note { margin: 14px 0 0; color: #818d83; font-size: 11px; line-height: 1.5; }
 .approved-note { color: #3c7252; }
 .refund-note { color: #2f6a4b; font-weight: 600; }
+.refund-rejected-note { color: #a84c43; font-weight: 600; }
 .rating-panel { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 16px; padding: 14px 16px; border: 1px solid #e8eee8; border-radius: 9px; background: #fbfcfa; }
 .rating-prompt { margin: 0; color: #53675a; font-size: 11px; }
 .rating-stars, .rating-result { display: flex; align-items: center; gap: 3px; }
