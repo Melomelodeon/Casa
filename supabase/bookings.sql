@@ -148,6 +148,53 @@ $$;
 revoke all on function public.end_host_tenancy(bigint) from public;
 grant execute on function public.end_host_tenancy(bigint) to authenticated;
 
+create or replace function public.end_tenant_booking(p_booking_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  booking_tenant_id uuid;
+  current_status text;
+  next_status text;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in to update this booking.';
+  end if;
+
+  select b.tenant_id, b.request_status
+  into booking_tenant_id, current_status
+  from public.bookings b
+  where b.id = p_booking_id
+  for update;
+
+  if not found then
+    raise exception 'This booking no longer exists.';
+  end if;
+
+  if booking_tenant_id <> current_user_id then
+    raise exception 'You do not have permission to update this booking.';
+  end if;
+
+  if current_status = 'pending' then
+    next_status := 'cancelled';
+  elsif current_status = 'approved' then
+    next_status := 'completed';
+  else
+    raise exception 'Only a pending request or an approved stay can be ended.';
+  end if;
+
+  update public.bookings
+  set request_status = next_status
+  where id = p_booking_id;
+end;
+$$;
+
+revoke all on function public.end_tenant_booking(bigint) from public;
+grant execute on function public.end_tenant_booking(bigint) to authenticated;
+
 create or replace function public.get_booked_listing_spaces()
 returns table(room_id bigint, bedspace_id bigint)
 language sql

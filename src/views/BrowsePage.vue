@@ -203,7 +203,7 @@ const router = useRouter();
 const { user } = useAuthUser();
 const { logout } = useLogout();
 const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Account');
-const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/browse');
+const accountPath = computed(() => user.value?.user_metadata?.role === 'landlord' ? '/host' : '/client');
 const selectedFloors = computed(() => selectedListing.value ? getBookingFloors(selectedListing.value) : []);
 function getListingTag(listing: Listing) {
   if (isListingFullyBooked(listing)) return { label: 'Fully booked', variant: 'fully-booked-tag' };

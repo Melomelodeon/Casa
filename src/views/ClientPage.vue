@@ -1,0 +1,443 @@
+<template>
+  <ion-page>
+    <ion-content :fullscreen="true" class="client-content">
+      <header class="client-header" :class="{ 'page-enter': shouldAnimate }">
+        <a class="brand" href="/home" aria-label="Casa home"><img src="/casa-logo.png" alt="" class="brand-mark" /><span>casa<span class="brand-dot">.</span></span></a>
+        <nav class="client-nav" aria-label="Client navigation">
+          <a href="/listings">Browse spaces</a>
+          <a class="active" href="/client">My bookings</a>
+        </nav>
+        <div class="client-account"><span class="avatar">{{ initials }}</span><span class="client-name">{{ displayName }}</span><button type="button" aria-label="Log out" @click="logout">Log out</button></div>
+      </header>
+
+      <main class="client-shell" :class="{ 'page-enter': shouldAnimate }">
+        <section class="welcome-row">
+          <div><span class="eyebrow">YOUR CASA ACCOUNT</span><h1>My bookings<span class="heading-dot">.</span></h1><p>Keep track of your requests and upcoming stays.</p></div>
+          <a class="browse-button" href="/listings"><ion-icon :icon="searchOutline" /> Find a space</a>
+        </section>
+
+        <section class="summary-grid" aria-label="Booking summary">
+          <article><span class="summary-icon">⌂</span><div><span>Total bookings</span><strong>{{ isLoading || errorMessage ? '—' : bookings.length }}</strong></div></article>
+          <article><span class="summary-icon pending-icon">◷</span><div><span>Awaiting host</span><strong>{{ isLoading || errorMessage ? '—' : pendingCount }}</strong></div></article>
+          <article><span class="summary-icon approved-icon">✓</span><div><span>Approved stays</span><strong>{{ isLoading || errorMessage ? '—' : approvedCount }}</strong></div></article>
+        </section>
+
+        <section class="bookings-section" aria-labelledby="bookings-title">
+          <div class="section-heading">
+            <div><span class="eyebrow">BOOKING ACTIVITY</span><h2 id="bookings-title">Your stays</h2></div>
+            <div class="tabs" role="tablist" aria-label="Filter bookings">
+              <button v-for="tab in tabs" :key="tab.value" type="button" role="tab" :aria-selected="selectedTab === tab.value" :class="{ active: selectedTab === tab.value }" @click="selectedTab = tab.value">
+                {{ tab.label }} <span>{{ tab.count }}</span>
+              </button>
+            </div>
+          </div>
+
+          <p v-if="errorMessage" class="data-message error-message" role="alert">
+            {{ errorMessage }}
+            <button type="button" @click="loadBookings">Try again</button>
+          </p>
+          <p v-if="notice" class="data-message success-message" role="status">{{ notice }}</p>
+          <p v-if="isLoading" class="data-message" role="status">Loading your bookings…</p>
+          <div v-else-if="!errorMessage && filteredBookings.length" class="booking-list">
+            <article v-for="(booking, index) in filteredBookings" :key="booking.id" class="booking-card" :class="{ 'booking-card-highlight': highlightedBookingId === booking.id }" :style="{ animationDelay: `${0.56 + index * 0.1}s` }">
+              <div class="booking-card-top">
+                <div>
+                  <span class="booking-reference">BOOKING #{{ booking.id }} · {{ booking.requestedAt }}</span>
+                  <h3>{{ booking.listingName }}</h3>
+                  <p class="listing-location">{{ booking.location }}</p>
+                </div>
+                <span class="request-status" :class="booking.status">{{ statusLabel(booking.status) }}</span>
+              </div>
+              <div class="booking-details">
+                <div><small>Space</small><strong>{{ booking.spaceName }}</strong></div>
+                <div><small>Move-in date</small><strong>{{ booking.moveInDate }}</strong></div>
+                <div><small>Monthly rent</small><strong>{{ formatAmount(booking.amount) }}</strong></div>
+                <div><small>Payment</small><strong class="payment-status" :class="booking.paymentStatus">{{ paymentLabel(booking.paymentStatus) }}</strong></div>
+              </div>
+              <p v-if="booking.status === 'pending'" class="booking-note">Your request is waiting for the host to review it.</p>
+              <p v-else-if="booking.status === 'approved'" class="booking-note approved-note">Your stay is approved. Contact the host if you need to coordinate your move-in.</p>
+              <p v-else-if="booking.status === 'cancelled'" class="booking-note">You cancelled this request.</p>
+              <p v-else-if="booking.status === 'declined'" class="booking-note">This request was declined by the host. You can browse other available spaces.</p>
+              <p v-else class="booking-note">This stay has ended.</p>
+              <div v-if="booking.status === 'pending' || booking.status === 'approved'" class="booking-actions">
+                <button type="button" class="end-booking-button" :disabled="updatingBookingId === booking.id" @click="confirmEndBooking(booking)">
+                  {{ updatingBookingId === booking.id ? 'Updating…' : booking.status === 'pending' ? 'Cancel request' : 'End stay early' }}
+                </button>
+              </div>
+            </article>
+          </div>
+          <div v-else-if="!isLoading && !errorMessage" class="empty-state">
+            <span class="empty-icon">⌂</span>
+            <h2>{{ selectedTab === 'all' ? 'No bookings yet' : selectedTab === 'current' ? 'No active bookings' : 'No past bookings' }}</h2>
+            <p>{{ selectedTab === 'all' ? 'When you request a space, you’ll find its status and details here.' : 'Your booking activity in this category will appear here.' }}</p>
+            <a href="/listings" class="browse-button"><ion-icon :icon="searchOutline" /> Explore spaces</a>
+          </div>
+        </section>
+      </main>
+      <div v-if="bookingToEnd" class="confirmation-backdrop" @click.self="closeEndBooking">
+        <section class="confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="end-booking-title" aria-describedby="end-booking-description">
+          <span class="confirmation-icon" aria-hidden="true">!</span>
+          <h2 id="end-booking-title">{{ bookingToEnd.status === 'pending' ? 'Cancel this request?' : 'End this stay early?' }}</h2>
+          <p id="end-booking-description">
+            <template v-if="bookingToEnd.status === 'pending'">
+              This will cancel your request for <strong>{{ bookingToEnd.listingName }}</strong> and release the space.
+            </template>
+            <template v-else>
+              This will end your approved stay at <strong>{{ bookingToEnd.listingName }}</strong> and release the space.
+              If you have already paid, contact the host to arrange any refund.
+            </template>
+          </p>
+          <p v-if="errorMessage" class="dialog-error" role="alert">{{ errorMessage }}</p>
+          <div class="confirmation-actions">
+            <button type="button" class="keep-booking-button" :disabled="updatingBookingId !== null" @click="closeEndBooking">Keep booking</button>
+            <button type="button" class="confirm-end-button" :disabled="updatingBookingId === bookingToEnd.id" @click="endBooking">
+              {{ updatingBookingId === bookingToEnd.id ? 'Updating…' : bookingToEnd.status === 'pending' ? 'Cancel request' : 'End stay early' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    </ion-content>
+  </ion-page>
+</template>
+
+<script setup lang="ts">
+import { onIonViewWillEnter } from '@ionic/vue';
+import { IonContent, IonIcon, IonPage } from '@ionic/vue';
+import { computed, onUnmounted, ref } from 'vue';
+import { searchOutline } from 'ionicons/icons';
+import { useAuthUser } from '../composables/useAuthUser';
+import { useLogout } from '../composables/useLogout';
+import { getSupabaseClient } from '../lib/supabase';
+
+type BookingStatus = 'pending' | 'approved' | 'declined' | 'completed' | 'cancelled';
+type BookingTab = 'all' | 'current' | 'past';
+type BookingRow = {
+  id: number;
+  listing_id: number;
+  room_id: number | null;
+  bedspace_id: number | null;
+  payment_status: string;
+  request_status: string;
+  move_in_date: string | null;
+  amount: number | null;
+  created_at: string;
+};
+type BookingSpaceRow = {
+  id: number;
+  name: string;
+  location: string;
+  floors: Array<{ rooms: Array<{ id: number; name: string; bedspaces: Array<{ id: number; name: string }> }> }>;
+};
+type ClientBooking = {
+  id: number;
+  listingName: string;
+  location: string;
+  spaceName: string;
+  moveInDate: string;
+  requestedAt: string;
+  amount: number | null;
+  paymentStatus: string;
+  status: BookingStatus;
+};
+
+const { user } = useAuthUser();
+const { logout } = useLogout();
+const displayName = computed(() => user.value?.user_metadata?.full_name || user.value?.email?.split('@')[0] || 'Client');
+const initials = computed(() => displayName.value.split(/\s+/).filter(Boolean).map((part: string) => part[0]).join('').slice(0, 2).toUpperCase());
+const bookings = ref<ClientBooking[]>([]);
+const selectedTab = ref<BookingTab>('all');
+const isLoading = ref(false);
+const errorMessage = ref('');
+const notice = ref('');
+const bookingToEnd = ref<ClientBooking | null>(null);
+const updatingBookingId = ref<number | null>(null);
+const shouldAnimate = ref(false);
+const highlightedBookingId = ref<number | null>(null);
+let highlightTimeout: ReturnType<typeof setTimeout> | undefined;
+const pendingCount = computed(() => bookings.value.filter((booking) => booking.status === 'pending').length);
+const approvedCount = computed(() => bookings.value.filter((booking) => booking.status === 'approved').length);
+const tabs = computed(() => [
+  { label: 'All', value: 'all' as const, count: bookings.value.length },
+  { label: 'Current', value: 'current' as const, count: bookings.value.filter((booking) => booking.status === 'pending' || booking.status === 'approved').length },
+  { label: 'Past', value: 'past' as const, count: bookings.value.filter((booking) => booking.status === 'declined' || booking.status === 'completed' || booking.status === 'cancelled').length },
+]);
+const filteredBookings = computed(() => bookings.value.filter((booking) => {
+  if (selectedTab.value === 'current') return booking.status === 'pending' || booking.status === 'approved';
+  if (selectedTab.value === 'past') return booking.status === 'declined' || booking.status === 'completed' || booking.status === 'cancelled';
+  return true;
+}));
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
+  return 'An unexpected error occurred.';
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return 'Not provided';
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? 'Not provided' : date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatRequestedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatAmount(value: number | null): string {
+  if (value === null) return 'Not available';
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `₱${amount.toLocaleString('en-PH')} / month` : 'Not available';
+}
+
+function statusLabel(status: BookingStatus): string {
+  return status === 'pending' ? 'Pending review' : status === 'approved' ? 'Approved' : status === 'declined' ? 'Declined' : status === 'cancelled' ? 'Cancelled' : 'Completed';
+}
+
+function paymentLabel(status: string): string {
+  return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+}
+
+function mapBooking(booking: BookingRow, listing: BookingSpaceRow | undefined): ClientBooking {
+  const status = booking.request_status;
+  if (status !== 'pending' && status !== 'approved' && status !== 'declined' && status !== 'completed' && status !== 'cancelled') {
+    throw new Error(`Booking ${booking.id} has an unsupported status.`);
+  }
+  const rooms = listing?.floors.flatMap((floor) => floor.rooms) ?? [];
+  const room = rooms.find((candidate) => candidate.id === booking.room_id);
+  const bedspace = room?.bedspaces.find((candidate) => candidate.id === booking.bedspace_id);
+  return {
+    id: booking.id,
+    listingName: listing?.name ?? 'Listing unavailable',
+    location: listing?.location ?? 'The listing details are no longer available.',
+    spaceName: bedspace ? `${bedspace.name} · ${room?.name}` : room?.name ?? 'Space details unavailable',
+    moveInDate: formatDate(booking.move_in_date),
+    requestedAt: formatRequestedAt(booking.created_at),
+    amount: booking.amount,
+    paymentStatus: booking.payment_status,
+    status,
+  };
+}
+
+async function loadBookings() {
+  isLoading.value = true;
+  errorMessage.value = '';
+  notice.value = '';
+  try {
+    const client = getSupabaseClient();
+    const { data: { user: account }, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    if (!account) throw new Error('Sign in to view your bookings.');
+
+    const { data: bookingData, error: bookingError } = await client.from('bookings')
+      .select('id, listing_id, room_id, bedspace_id, payment_status, request_status, move_in_date, amount, created_at')
+      .eq('tenant_id', account.id)
+      .order('created_at', { ascending: false });
+    if (bookingError) throw bookingError;
+
+    const bookingRows = (bookingData ?? []) as BookingRow[];
+    const listingIds = [...new Set(bookingRows.map((booking) => booking.listing_id))];
+    if (!listingIds.length) {
+      bookings.value = [];
+      return;
+    }
+
+    const { data: listingData, error: listingError } = await client.from('spaces').select(`
+      id, name, location, floors(rooms(id, name, bedspaces(id, name)))
+    `).in('id', listingIds);
+    if (listingError) throw listingError;
+
+    const listings = (listingData ?? []) as BookingSpaceRow[];
+    const listingsById = new Map(listings.map((listing) => [listing.id, listing]));
+    bookings.value = bookingRows.map((booking) => mapBooking(booking, listingsById.get(booking.listing_id)));
+  } catch (error) {
+    errorMessage.value = `Your bookings couldn’t be loaded: ${getErrorMessage(error)}`;
+    bookings.value = [];
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function confirmEndBooking(booking: ClientBooking) {
+  errorMessage.value = '';
+  bookingToEnd.value = booking;
+}
+
+function closeEndBooking() {
+  if (updatingBookingId.value !== null) return;
+  bookingToEnd.value = null;
+}
+
+async function endBooking() {
+  const booking = bookingToEnd.value;
+  if (!booking || updatingBookingId.value !== null) return;
+  updatingBookingId.value = booking.id;
+  errorMessage.value = '';
+  notice.value = '';
+  try {
+    const { error } = await getSupabaseClient().rpc('end_tenant_booking', { p_booking_id: booking.id });
+    if (error) throw error;
+    const wasPending = booking.status === 'pending';
+    booking.status = wasPending ? 'cancelled' : 'completed';
+    notice.value = wasPending ? 'Your booking request has been cancelled.' : 'Your stay has been ended.';
+    highlightedBookingId.value = booking.id;
+    if (highlightTimeout) clearTimeout(highlightTimeout);
+    highlightTimeout = setTimeout(() => {
+      highlightedBookingId.value = null;
+      highlightTimeout = undefined;
+    }, 1400);
+    bookingToEnd.value = null;
+    window.dispatchEvent(new Event('casa:booking-completed'));
+  } catch (error) {
+    errorMessage.value = `This booking couldn’t be updated: ${getErrorMessage(error)}`;
+  } finally {
+    updatingBookingId.value = null;
+  }
+}
+
+onIonViewWillEnter(() => {
+  shouldAnimate.value = false;
+  requestAnimationFrame(() => { shouldAnimate.value = true; });
+  void loadBookings();
+});
+onUnmounted(() => {
+  if (highlightTimeout) clearTimeout(highlightTimeout);
+});
+</script>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+:global(body) { background: #fbfaf7; color: #174b35; font-family: 'DM Sans', sans-serif; }
+.client-content { --background: #fbfaf7; }
+.client-header { min-height: 76px; padding: 0 clamp(22px, 6vw, 88px); display: flex; align-items: center; justify-content: space-between; gap: 24px; background: #fff; border-bottom: 1px solid #e8eee8; }
+.brand { display: inline-flex; align-items: center; gap: 9px; color: #174b35; font-size: 25px; font-weight: 700; text-decoration: none; letter-spacing: -1.5px; }
+.brand-mark { width: 35px; height: 35px; object-fit: contain; }
+.brand-dot, .heading-dot { color: #e9985d; }
+.client-nav { display: flex; align-items: center; gap: 30px; height: 76px; }
+.client-nav a { height: 100%; display: inline-flex; align-items: center; color: #66776c; font-size: 13px; font-weight: 600; text-decoration: none; border-bottom: 2px solid transparent; }
+.client-nav a.active { color: #174b35; border-color: #e9985d; }
+.client-account { display: flex; align-items: center; gap: 11px; }
+.avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #174b35; background: #e7f0e9; font-size: 12px; font-weight: 700; }
+.client-name { max-width: 150px; overflow: hidden; color: #354d3e; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.client-account button { padding: 8px 0 8px 10px; border: 0; color: #78847b; background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.client-shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 56px 0 90px; }
+.page-enter.client-header { animation: client-rise-in .48s both; }
+.page-enter .welcome-row { animation: client-rise-in .5s .08s both; }
+.page-enter .summary-grid article { animation: client-rise-in .48s both; }
+.page-enter .summary-grid article:nth-child(1) { animation-delay: .18s; }
+.page-enter .summary-grid article:nth-child(2) { animation-delay: .28s; }
+.page-enter .summary-grid article:nth-child(3) { animation-delay: .38s; }
+.page-enter .section-heading { animation: client-rise-in .48s .48s both; }
+.page-enter .booking-card,
+.page-enter .empty-state,
+.page-enter .data-message { animation: client-rise-in .48s both; }
+@keyframes client-rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.welcome-row { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 30px; }
+.eyebrow { color: #a06e45; font-size: 10px; font-weight: 700; letter-spacing: 1.6px; }
+h1, h2, h3, p { margin-top: 0; }
+.welcome-row h1 { margin: 8px 0 7px; color: #174b35; font-family: 'Playfair Display', Georgia, serif; font-size: clamp(32px, 4vw, 44px); font-weight: 600; letter-spacing: -1.2px; }
+.welcome-row p { margin-bottom: 0; color: #77847a; font-size: 14px; }
+.browse-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 0; border-radius: 8px; color: #fff; background: #20583c; font: inherit; font-size: 12px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.browse-button ion-icon { font-size: 16px; }
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 42px; }
+.summary-grid article { min-height: 96px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px solid #e7ece6; border-radius: 12px; background: #fff; }
+.summary-icon, .empty-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: #2a6947; background: #eaf3ec; font-size: 23px; }
+.pending-icon { color: #a86e34; background: #fff2df; }
+.approved-icon { color: #497d9a; background: #eaf4f8; }
+.summary-grid article div { display: grid; gap: 5px; }
+.summary-grid article div span { color: #78847b; font-size: 12px; }
+.summary-grid article strong { color: #174b35; font-size: 22px; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.section-heading h2 { margin: 5px 0 0; color: #174b35; font-family: 'Playfair Display', Georgia, serif; font-size: 26px; font-weight: 600; }
+.tabs { display: flex; gap: 5px; padding: 4px; border: 1px solid #e8ece7; border-radius: 9px; background: #fff; }
+.tabs button { display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 0; border-radius: 6px; color: #78847b; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.tabs button.active { color: #174b35; background: #edf4ee; font-weight: 700; }
+.tabs button span { color: inherit; opacity: .7; }
+.booking-list { display: grid; gap: 13px; }
+.booking-card { position: relative; overflow: hidden; padding: 22px 24px; border: 1px solid #e7ece6; border-radius: 12px; background: #fff; }
+.booking-card-highlight { animation: booking-card-highlight 1.4s ease-out both; }
+@keyframes booking-card-highlight {
+  0%, 100% { border-color: #e7ece6; background: #fff; box-shadow: 0 0 0 0 rgb(53 116 74 / 0%); }
+  25%, 60% { border-color: #74a982; background: #f0f7f0; box-shadow: 0 0 0 4px rgb(53 116 74 / 12%); }
+}
+.booking-card-top { display: flex; justify-content: space-between; gap: 15px; }
+.booking-reference { color: #9aa39b; font-size: 9px; font-weight: 700; letter-spacing: 1px; }
+.booking-card h3 { margin: 7px 0 4px; color: #204a34; font-size: 18px; font-weight: 700; }
+.listing-location { margin: 0; color: #849087; font-size: 12px; }
+.request-status { flex: 0 0 auto; align-self: flex-start; padding: 7px 10px; border-radius: 20px; color: #94672f; background: #fff4e3; font-size: 10px; font-weight: 700; }
+.request-status.approved { color: #2f6a4b; background: #e9f4ec; }
+.request-status.declined { color: #a84c43; background: #fbefed; }
+.request-status.cancelled { color: #68766d; background: #eff2ef; }
+.request-status.completed { color: #68766d; background: #eff2ef; }
+.booking-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 21px; padding: 17px 0; border-top: 1px solid #eef0ed; border-bottom: 1px solid #eef0ed; }
+.booking-details div { display: grid; align-content: start; gap: 6px; }
+.booking-details small { color: #929d94; font-size: 10px; }
+.booking-details strong { color: #375242; font-size: 12px; font-weight: 600; }
+.payment-status { text-transform: capitalize; }
+.payment-status.paid { color: #2f6a4b; }
+.booking-note { margin: 14px 0 0; color: #818d83; font-size: 11px; line-height: 1.5; }
+.approved-note { color: #3c7252; }
+.data-message { padding: 18px; border: 1px solid #e7ece6; border-radius: 10px; color: #68766d; background: #fff; font-size: 13px; }
+.error-message { color: #a84c43; }
+.success-message { color: #2f6a4b; }
+.error-message button { margin-left: 10px; border: 0; color: #174b35; background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
+.booking-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.end-booking-button { padding: 8px 12px; border: 1px solid #e5bcb4; border-radius: 7px; color: #a84c43; background: #fff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.end-booking-button:disabled { opacity: .6; cursor: wait; }
+.confirmation-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(20 40 28 / 48%); }
+.confirmation-dialog { width: min(100%, 430px); padding: 28px; border-radius: 14px; background: #fff; box-shadow: 0 18px 60px rgb(15 35 23 / 22%); }
+.confirmation-icon { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 15px; border-radius: 50%; color: #a84c43; background: #fbefed; font-weight: 700; }
+.confirmation-dialog h2 { margin-bottom: 9px; color: #204a34; font-family: 'Playfair Display', Georgia, serif; font-size: 23px; }
+.confirmation-dialog p { margin-bottom: 23px; color: #758178; font-size: 13px; line-height: 1.65; }
+.confirmation-dialog .dialog-error { margin: -8px 0 16px; color: #a84c43; font-size: 12px; }
+.confirmation-dialog strong { color: #385340; }
+.confirmation-actions { display: flex; justify-content: flex-end; gap: 9px; }
+.confirmation-actions button { min-height: 38px; padding: 0 13px; border-radius: 7px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.keep-booking-button { border: 1px solid #e1e7e1; color: #526357; background: #fff; }
+.confirm-end-button { border: 1px solid #a84c43; color: #fff; background: #a84c43; }
+.confirmation-actions button:disabled { opacity: .6; cursor: wait; }
+.empty-state { padding: 58px 20px; border: 1px dashed #dce5dc; border-radius: 12px; text-align: center; background: #fff; }
+.empty-icon { margin: 0 auto 15px; }
+.empty-state h2 { margin-bottom: 8px; color: #234a35; font-family: 'Playfair Display', Georgia, serif; font-size: 22px; }
+.empty-state p { margin: 0 auto 20px; color: #849087; font-size: 12px; }
+@media (max-width: 720px) {
+  .client-header { padding: 0 18px; gap: 12px; }
+  .brand { font-size: 22px; }
+  .brand-mark { width: 30px; height: 30px; }
+  .client-nav { gap: 14px; }
+  .client-nav a { font-size: 11px; }
+  .client-account { gap: 7px; }
+  .client-name { display: none; }
+  .client-shell { width: min(100% - 32px, 540px); padding-top: 38px; }
+  .summary-grid { gap: 8px; margin-bottom: 32px; }
+  .summary-grid article { min-height: 82px; gap: 8px; padding: 12px 10px; }
+  .summary-icon { width: 32px; height: 32px; font-size: 19px; }
+  .summary-grid article div span { font-size: 10px; }
+  .summary-grid article strong { font-size: 19px; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
+  .booking-details { grid-template-columns: repeat(2, 1fr); row-gap: 15px; }
+  .booking-card { padding: 18px; }
+}
+@media (max-width: 420px) {
+  .client-header { min-height: 64px; }
+  .client-nav { height: 64px; gap: 9px; }
+  .client-nav a { font-size: 10px; }
+  .avatar { width: 30px; height: 30px; }
+  .client-account button { font-size: 10px; }
+  .welcome-row { align-items: flex-start; flex-direction: column; }
+  .booking-card-top { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter.client-header,
+  .page-enter .welcome-row,
+  .page-enter .summary-grid article,
+  .page-enter .section-heading,
+  .page-enter .booking-card,
+  .page-enter .empty-state,
+  .page-enter .data-message,
+  .booking-card-highlight { animation-duration: .01ms; animation-delay: 0ms !important; }
+}
+</style>

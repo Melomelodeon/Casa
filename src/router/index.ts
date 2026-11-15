@@ -8,6 +8,7 @@ import CheckoutPage from '../views/CheckoutPage.vue'
 import HostDashboardPage from '../views/HostDashboardPage.vue'
 import HostSpacesPage from '../views/HostSpacesPage.vue'
 import HostRequestsPage from '../views/HostRequestsPage.vue'
+import ClientPage from '../views/ClientPage.vue'
 import AddSpacePage from '../views/AddSpacePage.vue'
 import PaymentPage from '../views/PaymentPage.vue'
 import ReceiptPage from '../views/ReceiptPage.vue'
@@ -63,6 +64,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/client',
+    name: 'ClientDashboard',
+    component: ClientPage,
+    meta: { requiresAuth: true, requiresTenant: true }
+  },
+  {
     path: '/host',
     name: 'HostDashboard',
     component: HostDashboardPage,
@@ -99,7 +106,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (!to.meta.requiresAuth && !to.meta.requiresLandlord) {
+  if (!to.meta.requiresAuth && !to.meta.requiresLandlord && !to.meta.requiresTenant) {
     return true
   }
 
@@ -110,8 +117,14 @@ router.beforeEach(async (to) => {
       return { name: 'Login', query: { redirect: to.fullPath } }
     }
 
-    if (to.meta.requiresLandlord && user.user_metadata?.role !== 'landlord') {
-      return { name: 'Browse' }
+    const role = user.user_metadata?.role
+
+    if (to.meta.requiresLandlord && role !== 'landlord') {
+      return role === 'tenant' ? { name: 'ClientDashboard' } : { name: 'Browse' }
+    }
+
+    if (to.meta.requiresTenant && role !== 'tenant') {
+      return role === 'landlord' ? { name: 'HostDashboard' } : { name: 'Browse' }
     }
 
     return true

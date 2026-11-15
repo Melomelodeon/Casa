@@ -155,7 +155,7 @@ async function login() {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '';
     const destination = redirect.startsWith('/') && !redirect.startsWith('//')
       ? redirect
-      : accountRole === 'landlord' ? '/host' : '/browse';
+      : accountRole === 'landlord' ? '/host' : '/client';
     await router.replace(destination);
   } catch (error) {
     formError.value = true;
@@ -187,7 +187,7 @@ async function register() {
     submitted.value = true;
     formMessage.value = data.session
       ? 'Your Casa account is ready. Welcome!'
-      : 'Account created. Check your email to confirm your account.';
+      : 'If this is a new Casa account, check your email to confirm it. If you already have an account, log in; signing up again will not change its account type.';
     fullName.value = '';
     email.value = '';
     password.value = '';
