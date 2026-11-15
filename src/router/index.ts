@@ -116,7 +116,9 @@ router.beforeEach(async (to) => {
     const { data: { user } } = await getSupabaseClient().auth.getUser()
 
     if (!user) {
-      return { name: 'Login', query: { redirect: to.fullPath } }
+      return to.meta.requiresAuth
+        ? { name: 'Login', query: { redirect: to.fullPath } }
+        : true
     }
 
     const role = user.user_metadata?.role
