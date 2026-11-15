@@ -585,10 +585,12 @@ h1, h2, h3, p { margin-top: 0; }
 .list-space-cancel { border: 1px solid #e1e7e1; color: #526357; background: #fff; }
 .list-space-continue { border: 1px solid #20583c; color: #fff; background: #20583c; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 42px; }
-.summary-grid article { min-height: 96px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px solid #e7ece6; border-radius: 12px; background: #fff; }
+.summary-grid article { min-height: 96px; display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px solid #d8e6d9; border-radius: 12px; background: #f0f6ef; box-shadow: 0 4px 14px rgb(23 75 53 / 6%); }
+.summary-grid article:nth-child(2) { border-color: #f1d4c2; background: #fff1e8; }
+.summary-grid article:nth-child(3) { border-color: #efdfb2; background: #fff7e3; }
 .summary-icon, .empty-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: #2a6947; background: #eaf3ec; font-size: 23px; }
 .pending-icon { color: #a86e34; background: #fff2df; }
-.approved-icon { color: #497d9a; background: #eaf4f8; }
+.approved-icon { color: #36734e; background: #e5f0e2; }
 .summary-grid article div { display: grid; gap: 5px; }
 .summary-grid article div span { color: #78847b; font-size: 12px; }
 .summary-grid article strong { color: #174b35; font-size: 22px; }
@@ -599,10 +601,10 @@ h1, h2, h3, p { margin-top: 0; }
 .tabs button.active { color: #174b35; background: #edf4ee; font-weight: 700; }
 .tabs button span { color: inherit; opacity: .7; }
 .booking-list { display: grid; gap: 13px; }
-.booking-card { position: relative; overflow: hidden; padding: 22px 24px; border: 1px solid #e7ece6; border-radius: 12px; background: #fff; }
+.booking-card { position: relative; overflow: hidden; padding: 22px 24px; border: 1px solid #d8e6d9; border-left: 4px solid #36734e; border-radius: 12px; background: #f7faf4; box-shadow: 0 5px 16px rgb(23 75 53 / 7%); }
 .booking-card-highlight { animation: booking-card-highlight 1.4s ease-out both; }
 @keyframes booking-card-highlight {
-  0%, 100% { border-color: #e7ece6; background: #fff; box-shadow: 0 0 0 0 rgb(53 116 74 / 0%); }
+  0%, 100% { border-color: #d8e6d9; background: #f7faf4; box-shadow: 0 5px 16px rgb(23 75 53 / 7%); }
   25%, 60% { border-color: #74a982; background: #f0f7f0; box-shadow: 0 0 0 4px rgb(53 116 74 / 12%); }
 }
 .booking-card-top { display: flex; justify-content: space-between; gap: 15px; }
@@ -681,13 +683,14 @@ h1, h2, h3, p { margin-top: 0; }
 .empty-state h2 { margin-bottom: 8px; color: #234a35; font-family: 'Playfair Display', Georgia, serif; font-size: 22px; }
 .empty-state p { margin: 0 auto 20px; color: #849087; font-size: 12px; }
 @media (max-width: 720px) {
-  .client-header { padding: 0 18px; gap: 12px; }
+  .client-header { min-height: 0; padding: 10px 18px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; }
   .brand { font-size: 22px; }
   .brand-mark { width: 30px; height: 30px; }
-  .client-nav { gap: 14px; }
+  .client-nav { grid-column: 1 / -1; justify-content: center; gap: clamp(24px, 8vw, 40px); height: 44px; }
   .client-nav a { font-size: 11px; }
   .client-account { gap: 7px; }
   .client-name { display: none; }
+  .client-account button { min-height: 40px; }
   .client-shell { width: min(100% - 32px, 540px); padding-top: 38px; }
   .summary-grid { gap: 8px; margin-bottom: 32px; }
   .summary-grid article { min-height: 82px; gap: 8px; padding: 12px 10px; }
@@ -699,11 +702,10 @@ h1, h2, h3, p { margin-top: 0; }
   .booking-card { padding: 18px; }
 }
 @media (max-width: 420px) {
-  .client-header { min-height: 64px; }
-  .client-nav { height: 64px; gap: 9px; }
-  .client-nav a { font-size: 10px; }
+  .client-header { padding-right: 14px; padding-left: 14px; }
+  .client-nav { height: 44px; gap: 24px; }
   .avatar { width: 30px; height: 30px; }
-  .client-account button { font-size: 10px; }
+  .client-account button { font-size: 11px; }
   .welcome-row { align-items: flex-start; flex-direction: column; }
   .client-cta-group { width: 100%; }
   .booking-card-top { flex-direction: column; }

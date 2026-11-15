@@ -115,5 +115,16 @@ onUnmounted(() => {
 .redirect-countdown { align-items: center; border: 1px solid rgba(255,255,255,.7); border-radius: 50%; display: inline-flex; font-variant-numeric: tabular-nums; height: 30px; justify-content: center; text-decoration: none; width: 30px; }
 .receipt-error { background: #fff1f0; border-radius: 8px; color: #8d2821; margin: 22px 0 0; max-width: 535px; padding: 14px; text-align: center; }
 .return-link { color: white; margin-top: 24px; }
-@media (max-width: 480px) { .receipt-card { padding: 24px 20px 38px; }.receipt-card h1 { font-size: 23px; }.receipt-row { font-size: 14px; }.receipt-row.total strong { font-size: 23px; }.receipt-note { margin-top: 90px; } }
+@media (max-width: 480px) {
+  .receipt-card { padding: 24px 20px 38px; }
+  .receipt-brand { font-size: 16px; }
+  .receipt-card h1 { font-size: 20px; }
+  .receipt-card p { font-size: 12px; }
+  .receipt-row { font-size: 13px; }
+  .receipt-row.total strong { font-size: 20px; }
+  .receipt-meta { font-size: 10px; }
+  .receipt-note { font-size: 12px; margin-top: 90px; }
+  .merchant-redirect { font-size: 13px; }
+  .receipt-error, .return-link { font-size: 13px; }
+}
 </style>

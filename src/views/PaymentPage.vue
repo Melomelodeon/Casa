@@ -101,5 +101,18 @@ async function pay() {
 .pay-button:hover { background: #0756c7; }
 .pay-button:disabled { cursor: wait; opacity: .7; }
 .error-message { background: #fce8e5; border-radius: 7px; color: #a33b2d; font-size: 13px; padding: 10px; text-align: center; }
-@media (max-width: 480px) { .payment-card { padding: 24px 20px 30px; }.payment-card h1 { font-size: 34px; }.payment-row, .total-row { padding-left: 8px; padding-right: 8px; }.review-copy { margin-top: 52px; } }
+@media (max-width: 480px) {
+  .gcash-brand { font-size: 26px; }
+  .payment-card { padding: 24px 20px 30px; }
+  .payment-card h1 { font-size: 30px; }
+  .payment-label { font-size: 13px; }
+  .payment-row { font-size: 16px; }
+  .payment-row strong { font-size: 16px; }
+  .payment-row, .total-row { padding-left: 8px; padding-right: 8px; }
+  .total-row { font-size: 16px; }
+  .total-row strong { font-size: 22px; }
+  .review-copy { font-size: 14px; margin-top: 52px; }
+  .pay-button { font-size: 16px; }
+  .error-message { font-size: 12px; }
+}
 </style>
